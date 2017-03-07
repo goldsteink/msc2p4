@@ -1,3 +1,5 @@
+#include <PyModule.hpp>
+
 #include "market-spread-cpp.hpp"
 #include "WallarooCppApi/ApiHooks.hpp"
 
@@ -68,12 +70,22 @@ extern "C"
 
   extern wallaroo::StateComputation *get_check_order()
   {
+/*#ifdef DEBUG
+    cout << "Inside: " << __PRETTY_FUNCTION__ << endl;
+#endif
+    PyModule& pyMod = PyModule::getInstance();
+    return pyMod.getNbboCheck();*/
     return new CheckOrder();
   }
 
   extern wallaroo::StateComputation *get_update_nbbo()
   {
-    return new UpdateNbbo();
+#ifdef DEBUG
+    cout << "Inside: " << __PRETTY_FUNCTION__ << endl;
+#endif
+    PyModule& pyMod = PyModule::getInstance();
+    return pyMod.getNbboCheck();
+    //return new UpdateNbbo();
   }
 
   extern wallaroo::SinkEncoder *get_order_result_sink_encoder()
@@ -358,7 +370,6 @@ void *CheckOrderNoOutput::compute(wallaroo::Data *input_, wallaroo::StateChangeR
 void *CheckOrder::compute(wallaroo::Data *input_, wallaroo::StateChangeRepository *state_change_repository_, void *state_change_repository_helper_, wallaroo::State *state_, void *none)
 {
   OrderMessage *order_message = (OrderMessage *) input_;
-
   SymbolData *symbol_data = (SymbolData *) state_;
 
   if (symbol_data->should_reject_trades)
@@ -395,20 +406,20 @@ void *UpdateNbboNoOutput::compute(wallaroo::Data *input_, wallaroo::StateChangeR
   return w_stateful_computation_get_return(state_change_repository_helper_, nullptr, state_change_handle);
 }
 
+/*
+ * KAGR
 void *UpdateNbbo::compute(wallaroo::Data *input_, wallaroo::StateChangeRepository *state_change_repository_, void *state_change_repository_helper_, wallaroo::State *state_, void *none)
 {
   NbboMessage *nbbo_message = (NbboMessage *) input_;
   void *state_change_handle = w_state_change_repository_lookup_by_name(state_change_repository_helper_, state_change_repository_, "symbol data state change");
   SymbolDataStateChange *symbol_data_state_change = (SymbolDataStateChange *)w_state_change_get_state_change_object(state_change_repository_helper_, state_change_handle);
 
-
   double offer_bid_difference = nbbo_message->offer_price() - nbbo_message->bid_price();
   bool should_reject_trades = (offer_bid_difference >= 0.05) || ((offer_bid_difference / nbbo_message->mid()) >= 0.05);
   
-  
   symbol_data_state_change->update(should_reject_trades, nbbo_message->bid_price(), nbbo_message->offer_price());
   return w_stateful_computation_get_return(state_change_repository_helper_, nullptr, state_change_handle);
-}
+}*/
 
 OrderResult::OrderResult(OrderMessage *order_message_, double bid_, double offer_, uint64_t timestamp_): bid(bid_), offer(offer_), timestamp(timestamp_)
 {

@@ -5,7 +5,7 @@
 
 #include <WallarooCppApi/Data.hpp>
 #include <WallarooCppApi/ApiHooks.hpp>
-using namespace wallaroo;
+//using namespace wallaroo;
 
 enum FixType
 {

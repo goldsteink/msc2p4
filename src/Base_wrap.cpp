@@ -13,6 +13,7 @@
 #define SWIGPYTHON
 #endif
 
+#define SWIG_DIRECTORS
 #define SWIG_PYTHON_DIRECTOR_NO_VTABLE
 
 
@@ -3000,14 +3001,471 @@ SWIG_Python_NonDynamicSetAttr(PyObject *obj, PyObject *name, PyObject *value) {
 #define SWIG_contract_assert(expr, msg) if (!(expr)) { SWIG_Error(SWIG_RuntimeError, msg); SWIG_fail; } else 
 
 
+/* -----------------------------------------------------------------------------
+ * director_common.swg
+ *
+ * This file contains support for director classes which is common between
+ * languages.
+ * ----------------------------------------------------------------------------- */
+
+/*
+  Use -DSWIG_DIRECTOR_STATIC if you prefer to avoid the use of the
+  'Swig' namespace. This could be useful for multi-modules projects.
+*/
+#ifdef SWIG_DIRECTOR_STATIC
+/* Force anonymous (static) namespace */
+#define Swig
+#endif
+/* -----------------------------------------------------------------------------
+ * director.swg
+ *
+ * This file contains support for director classes so that Python proxy
+ * methods can be called from C++.
+ * ----------------------------------------------------------------------------- */
+
+#ifndef SWIG_DIRECTOR_PYTHON_HEADER_
+#define SWIG_DIRECTOR_PYTHON_HEADER_
+
+#include <string>
+#include <iostream>
+#include <exception>
+#include <vector>
+#include <map>
+
+
+/*
+  Use -DSWIG_PYTHON_DIRECTOR_NO_VTABLE if you don't want to generate a 'virtual
+  table', and avoid multiple GetAttr calls to retrieve the python
+  methods.
+*/
+
+#ifndef SWIG_PYTHON_DIRECTOR_NO_VTABLE
+#ifndef SWIG_PYTHON_DIRECTOR_VTABLE
+#define SWIG_PYTHON_DIRECTOR_VTABLE
+#endif
+#endif
+
+
+
+/*
+  Use -DSWIG_DIRECTOR_NO_UEH if you prefer to avoid the use of the
+  Undefined Exception Handler provided by swig.
+*/
+#ifndef SWIG_DIRECTOR_NO_UEH
+#ifndef SWIG_DIRECTOR_UEH
+#define SWIG_DIRECTOR_UEH
+#endif
+#endif
+
+
+/*
+  Use -DSWIG_DIRECTOR_NORTTI if you prefer to avoid the use of the
+  native C++ RTTI and dynamic_cast<>. But be aware that directors
+  could stop working when using this option.
+*/
+#ifdef SWIG_DIRECTOR_NORTTI
+/*
+   When we don't use the native C++ RTTI, we implement a minimal one
+   only for Directors.
+*/
+# ifndef SWIG_DIRECTOR_RTDIR
+# define SWIG_DIRECTOR_RTDIR
+
+namespace Swig {
+  class Director;
+  SWIGINTERN std::map<void *, Director *>& get_rtdir_map() {
+    static std::map<void *, Director *> rtdir_map;
+    return rtdir_map;
+  }
+
+  SWIGINTERNINLINE void set_rtdir(void *vptr, Director *rtdir) {
+    get_rtdir_map()[vptr] = rtdir;
+  }
+
+  SWIGINTERNINLINE Director *get_rtdir(void *vptr) {
+    std::map<void *, Director *>::const_iterator pos = get_rtdir_map().find(vptr);
+    Director *rtdir = (pos != get_rtdir_map().end()) ? pos->second : 0;
+    return rtdir;
+  }
+}
+# endif /* SWIG_DIRECTOR_RTDIR */
+
+# define SWIG_DIRECTOR_CAST(ARG) Swig::get_rtdir(static_cast<void *>(ARG))
+# define SWIG_DIRECTOR_RGTR(ARG1, ARG2) Swig::set_rtdir(static_cast<void *>(ARG1), ARG2)
+
+#else
+
+# define SWIG_DIRECTOR_CAST(ARG) dynamic_cast<Swig::Director *>(ARG)
+# define SWIG_DIRECTOR_RGTR(ARG1, ARG2)
+
+#endif /* SWIG_DIRECTOR_NORTTI */
+
+extern "C" {
+  struct swig_type_info;
+}
+
+namespace Swig {
+
+  /* memory handler */
+  struct GCItem {
+    virtual ~GCItem() {}
+
+    virtual int get_own() const {
+      return 0;
+    }
+  };
+
+  struct GCItem_var {
+    GCItem_var(GCItem *item = 0) : _item(item) {
+    }
+
+    GCItem_var& operator=(GCItem *item) {
+      GCItem *tmp = _item;
+      _item = item;
+      delete tmp;
+      return *this;
+    }
+
+    ~GCItem_var() {
+      delete _item;
+    }
+
+    GCItem * operator->() const {
+      return _item;
+    }
+
+  private:
+    GCItem *_item;
+  };
+
+  struct GCItem_Object : GCItem {
+    GCItem_Object(int own) : _own(own) {
+    }
+
+    virtual ~GCItem_Object() {
+    }
+
+    int get_own() const {
+      return _own;
+    }
+
+  private:
+    int _own;
+  };
+
+  template <typename Type>
+  struct GCItem_T : GCItem {
+    GCItem_T(Type *ptr) : _ptr(ptr) {
+    }
+
+    virtual ~GCItem_T() {
+      delete _ptr;
+    }
+
+  private:
+    Type *_ptr;
+  };
+
+  template <typename Type>
+  struct GCArray_T : GCItem {
+    GCArray_T(Type *ptr) : _ptr(ptr) {
+    }
+
+    virtual ~GCArray_T() {
+      delete[] _ptr;
+    }
+
+  private:
+    Type *_ptr;
+  };
+
+  /* base class for director exceptions */
+  class DirectorException : public std::exception {
+  protected:
+    std::string swig_msg;
+  public:
+    DirectorException(PyObject *error, const char *hdr ="", const char *msg ="") : swig_msg(hdr) {
+      SWIG_PYTHON_THREAD_BEGIN_BLOCK;
+      if (msg[0]) {
+        swig_msg += " ";
+        swig_msg += msg;
+      }
+      if (!PyErr_Occurred()) {
+        PyErr_SetString(error, what());
+      }
+      SWIG_PYTHON_THREAD_END_BLOCK;
+    }
+
+    virtual ~DirectorException() throw() {
+    }
+
+    /* Deprecated, use what() instead */
+    const char *getMessage() const {
+      return what();
+    }
+
+    const char *what() const throw() {
+      return swig_msg.c_str();
+    }
+
+    static void raise(PyObject *error, const char *msg) {
+      throw DirectorException(error, msg);
+    }
+
+    static void raise(const char *msg) {
+      raise(PyExc_RuntimeError, msg);
+    }
+  };
+
+  /* unknown exception handler  */
+  class UnknownExceptionHandler {
+#ifdef SWIG_DIRECTOR_UEH
+    static void handler() {
+      try {
+        throw;
+      } catch (DirectorException& e) {
+        std::cerr << "SWIG Director exception caught:" << std::endl
+                  << e.what() << std::endl;
+      } catch (std::exception& e) {
+        std::cerr << "std::exception caught: "<< e.what() << std::endl;
+      } catch (...) {
+        std::cerr << "Unknown exception caught." << std::endl;
+      }
+
+      std::cerr << std::endl
+                << "Python interpreter traceback:" << std::endl;
+      PyErr_Print();
+      std::cerr << std::endl;
+
+      std::cerr << "This exception was caught by the SWIG unexpected exception handler." << std::endl
+                << "Try using %feature(\"director:except\") to avoid reaching this point." << std::endl
+                << std::endl
+                << "Exception is being re-thrown, program will likely abort/terminate." << std::endl;
+      throw;
+    }
+
+  public:
+
+    std::unexpected_handler old;
+    UnknownExceptionHandler(std::unexpected_handler nh = handler) {
+      old = std::set_unexpected(nh);
+    }
+
+    ~UnknownExceptionHandler() {
+      std::set_unexpected(old);
+    }
+#endif
+  };
+
+  /* type mismatch in the return value from a python method call */
+  class DirectorTypeMismatchException : public DirectorException {
+  public:
+    DirectorTypeMismatchException(PyObject *error, const char *msg="")
+      : DirectorException(error, "SWIG director type mismatch", msg) {
+    }
+
+    DirectorTypeMismatchException(const char *msg="")
+      : DirectorException(PyExc_TypeError, "SWIG director type mismatch", msg) {
+    }
+
+    static void raise(PyObject *error, const char *msg) {
+      throw DirectorTypeMismatchException(error, msg);
+    }
+
+    static void raise(const char *msg) {
+      throw DirectorTypeMismatchException(msg);
+    }
+  };
+
+  /* any python exception that occurs during a director method call */
+  class DirectorMethodException : public DirectorException {
+  public:
+    DirectorMethodException(const char *msg = "")
+      : DirectorException(PyExc_RuntimeError, "SWIG director method error.", msg) {
+    }
+
+    static void raise(const char *msg) {
+      throw DirectorMethodException(msg);
+    }
+  };
+
+  /* attempt to call a pure virtual method via a director method */
+  class DirectorPureVirtualException : public DirectorException {
+  public:
+    DirectorPureVirtualException(const char *msg = "")
+      : DirectorException(PyExc_RuntimeError, "SWIG director pure virtual method called", msg) {
+    }
+
+    static void raise(const char *msg) {
+      throw DirectorPureVirtualException(msg);
+    }
+  };
+
+
+#if defined(SWIG_PYTHON_THREADS)
+/*  __THREAD__ is the old macro to activate some thread support */
+# if !defined(__THREAD__)
+#   define __THREAD__ 1
+# endif
+#endif
+
+#ifdef __THREAD__
+# include "pythread.h"
+  class Guard {
+    PyThread_type_lock &mutex_;
+
+  public:
+    Guard(PyThread_type_lock & mutex) : mutex_(mutex) {
+      PyThread_acquire_lock(mutex_, WAIT_LOCK);
+    }
+
+    ~Guard() {
+      PyThread_release_lock(mutex_);
+    }
+  };
+# define SWIG_GUARD(mutex) Guard _guard(mutex)
+#else
+# define SWIG_GUARD(mutex)
+#endif
+
+  /* director base class */
+  class Director {
+  private:
+    /* pointer to the wrapped python object */
+    PyObject *swig_self;
+    /* flag indicating whether the object is owned by python or c++ */
+    mutable bool swig_disown_flag;
+
+    /* decrement the reference count of the wrapped python object */
+    void swig_decref() const {
+      if (swig_disown_flag) {
+        SWIG_PYTHON_THREAD_BEGIN_BLOCK;
+        Py_DECREF(swig_self);
+        SWIG_PYTHON_THREAD_END_BLOCK;
+      }
+    }
+
+  public:
+    /* wrap a python object. */
+    Director(PyObject *self) : swig_self(self), swig_disown_flag(false) {
+    }
+
+    /* discard our reference at destruction */
+    virtual ~Director() {
+      swig_decref();
+    }
+
+    /* return a pointer to the wrapped python object */
+    PyObject *swig_get_self() const {
+      return swig_self;
+    }
+
+    /* acquire ownership of the wrapped python object (the sense of "disown" is from python) */
+    void swig_disown() const {
+      if (!swig_disown_flag) {
+        swig_disown_flag=true;
+        swig_incref();
+      }
+    }
+
+    /* increase the reference count of the wrapped python object */
+    void swig_incref() const {
+      if (swig_disown_flag) {
+        Py_INCREF(swig_self);
+      }
+    }
+
+    /* methods to implement pseudo protected director members */
+    virtual bool swig_get_inner(const char * /* swig_protected_method_name */) const {
+      return true;
+    }
+
+    virtual void swig_set_inner(const char * /* swig_protected_method_name */, bool /* swig_val */) const {
+    }
+
+  /* ownership management */
+  private:
+    typedef std::map<void *, GCItem_var> swig_ownership_map;
+    mutable swig_ownership_map swig_owner;
+#ifdef __THREAD__
+    static PyThread_type_lock swig_mutex_own;
+#endif
+
+  public:
+    template <typename Type>
+    void swig_acquire_ownership_array(Type *vptr) const {
+      if (vptr) {
+        SWIG_GUARD(swig_mutex_own);
+        swig_owner[vptr] = new GCArray_T<Type>(vptr);
+      }
+    }
+
+    template <typename Type>
+    void swig_acquire_ownership(Type *vptr) const {
+      if (vptr) {
+        SWIG_GUARD(swig_mutex_own);
+        swig_owner[vptr] = new GCItem_T<Type>(vptr);
+      }
+    }
+
+    void swig_acquire_ownership_obj(void *vptr, int own) const {
+      if (vptr && own) {
+        SWIG_GUARD(swig_mutex_own);
+        swig_owner[vptr] = new GCItem_Object(own);
+      }
+    }
+
+    int swig_release_ownership(void *vptr) const {
+      int own = 0;
+      if (vptr) {
+        SWIG_GUARD(swig_mutex_own);
+        swig_ownership_map::iterator iter = swig_owner.find(vptr);
+        if (iter != swig_owner.end()) {
+          own = iter->second->get_own();
+          swig_owner.erase(iter);
+        }
+      }
+      return own;
+    }
+
+    template <typename Type>
+    static PyObject *swig_pyobj_disown(PyObject *pyobj, PyObject *SWIGUNUSEDPARM(args)) {
+      SwigPyObject *sobj = (SwigPyObject *)pyobj;
+      sobj->own = 0;
+      Director *d = SWIG_DIRECTOR_CAST(reinterpret_cast<Type *>(sobj->ptr));
+      if (d)
+        d->swig_disown();
+      return PyWeakref_NewProxy(pyobj, NULL);
+    }
+  };
+
+#ifdef __THREAD__
+  PyThread_type_lock Director::swig_mutex_own = PyThread_allocate_lock();
+#endif
+}
+
+#endif
 
 /* -------- TYPES TABLE (BEGIN) -------- */
 
 #define SWIGTYPE_p_Base swig_types[0]
 #define SWIGTYPE_p_CheckOrder swig_types[1]
 #define SWIGTYPE_p_char swig_types[2]
-static swig_type_info *swig_types[4];
-static swig_module_info swig_module = {swig_types, 3, 0, 0, 0, 0};
+#define SWIGTYPE_p_uint64_t swig_types[3]
+#define SWIGTYPE_p_void swig_types[4]
+#define SWIGTYPE_p_wallaroo__Computation swig_types[5]
+#define SWIGTYPE_p_wallaroo__Data swig_types[6]
+#define SWIGTYPE_p_wallaroo__EncodableData swig_types[7]
+#define SWIGTYPE_p_wallaroo__Hashable swig_types[8]
+#define SWIGTYPE_p_wallaroo__ManagedObject swig_types[9]
+#define SWIGTYPE_p_wallaroo__Serializable swig_types[10]
+#define SWIGTYPE_p_wallaroo__State swig_types[11]
+#define SWIGTYPE_p_wallaroo__StateChange swig_types[12]
+#define SWIGTYPE_p_wallaroo__StateChangeBuilder swig_types[13]
+#define SWIGTYPE_p_wallaroo__StateChangeRepository swig_types[14]
+#define SWIGTYPE_p_wallaroo__StateComputation swig_types[15]
+static swig_type_info *swig_types[17];
+static swig_module_info swig_module = {swig_types, 16, 0, 0, 0, 0};
 #define SWIG_TypeQuery(name) SWIG_TypeQueryModule(&swig_module, &swig_module, name)
 #define SWIG_MangledTypeQuery(name) SWIG_MangledTypeQueryModule(&swig_module, &swig_module, name)
 
@@ -3112,7 +3570,443 @@ namespace swig {
 }
 
 
+  #include "/usr/local/include/WallarooCppApi/Hashable.hpp"
+  #include "/usr/local/include/WallarooCppApi/Serializable.hpp"
+  #include "/usr/local/include/WallarooCppApi/ManagedObject.hpp"
+  #include "/usr/local/include/WallarooCppApi/Data.hpp"
+  #include "/usr/local/include/WallarooCppApi/State.hpp"
+  #include "/usr/local/include/WallarooCppApi/StateChange.hpp"
+  #include "/usr/local/include/WallarooCppApi/StateChangeRepository.hpp"
+  #include "/usr/local/include/WallarooCppApi/StateChangeBuilder.hpp"
+  #include "/usr/local/include/WallarooCppApi/Computation.hpp"
   #include "Base.hpp"
+  extern void printKevin();
+
+
+#include <string>
+
+
+SWIGINTERN swig_type_info*
+SWIG_pchar_descriptor(void)
+{
+  static int init = 0;
+  static swig_type_info* info = 0;
+  if (!init) {
+    info = SWIG_TypeQuery("_p_char");
+    init = 1;
+  }
+  return info;
+}
+
+
+SWIGINTERN int
+SWIG_AsCharPtrAndSize(PyObject *obj, char** cptr, size_t* psize, int *alloc)
+{
+#if PY_VERSION_HEX>=0x03000000
+#if defined(SWIG_PYTHON_STRICT_BYTE_CHAR)
+  if (PyBytes_Check(obj))
+#else
+  if (PyUnicode_Check(obj))
+#endif
+#else  
+  if (PyString_Check(obj))
+#endif
+  {
+    char *cstr; Py_ssize_t len;
+#if PY_VERSION_HEX>=0x03000000
+#if !defined(SWIG_PYTHON_STRICT_BYTE_CHAR)
+    if (!alloc && cptr) {
+        /* We can't allow converting without allocation, since the internal
+           representation of string in Python 3 is UCS-2/UCS-4 but we require
+           a UTF-8 representation.
+           TODO(bhy) More detailed explanation */
+        return SWIG_RuntimeError;
+    }
+    obj = PyUnicode_AsUTF8String(obj);
+    if(alloc) *alloc = SWIG_NEWOBJ;
+#endif
+    PyBytes_AsStringAndSize(obj, &cstr, &len);
+#else
+    PyString_AsStringAndSize(obj, &cstr, &len);
+#endif
+    if (cptr) {
+      if (alloc) {
+	/* 
+	   In python the user should not be able to modify the inner
+	   string representation. To warranty that, if you define
+	   SWIG_PYTHON_SAFE_CSTRINGS, a new/copy of the python string
+	   buffer is always returned.
+
+	   The default behavior is just to return the pointer value,
+	   so, be careful.
+	*/ 
+#if defined(SWIG_PYTHON_SAFE_CSTRINGS)
+	if (*alloc != SWIG_OLDOBJ) 
+#else
+	if (*alloc == SWIG_NEWOBJ) 
+#endif
+	{
+	  *cptr = reinterpret_cast< char* >(memcpy(new char[len + 1], cstr, sizeof(char)*(len + 1)));
+	  *alloc = SWIG_NEWOBJ;
+	} else {
+	  *cptr = cstr;
+	  *alloc = SWIG_OLDOBJ;
+	}
+      } else {
+#if PY_VERSION_HEX>=0x03000000
+#if defined(SWIG_PYTHON_STRICT_BYTE_CHAR)
+	*cptr = PyBytes_AsString(obj);
+#else
+	assert(0); /* Should never reach here with Unicode strings in Python 3 */
+#endif
+#else
+	*cptr = SWIG_Python_str_AsChar(obj);
+#endif
+      }
+    }
+    if (psize) *psize = len + 1;
+#if PY_VERSION_HEX>=0x03000000 && !defined(SWIG_PYTHON_STRICT_BYTE_CHAR)
+    Py_XDECREF(obj);
+#endif
+    return SWIG_OK;
+  } else {
+#if defined(SWIG_PYTHON_2_UNICODE)
+#if defined(SWIG_PYTHON_STRICT_BYTE_CHAR)
+#error "Cannot use both SWIG_PYTHON_2_UNICODE and SWIG_PYTHON_STRICT_BYTE_CHAR at once"
+#endif
+#if PY_VERSION_HEX<0x03000000
+    if (PyUnicode_Check(obj)) {
+      char *cstr; Py_ssize_t len;
+      if (!alloc && cptr) {
+        return SWIG_RuntimeError;
+      }
+      obj = PyUnicode_AsUTF8String(obj);
+      if (PyString_AsStringAndSize(obj, &cstr, &len) != -1) {
+        if (cptr) {
+          if (alloc) *alloc = SWIG_NEWOBJ;
+          *cptr = reinterpret_cast< char* >(memcpy(new char[len + 1], cstr, sizeof(char)*(len + 1)));
+        }
+        if (psize) *psize = len + 1;
+
+        Py_XDECREF(obj);
+        return SWIG_OK;
+      } else {
+        Py_XDECREF(obj);
+      }
+    }
+#endif
+#endif
+
+    swig_type_info* pchar_descriptor = SWIG_pchar_descriptor();
+    if (pchar_descriptor) {
+      void* vptr = 0;
+      if (SWIG_ConvertPtr(obj, &vptr, pchar_descriptor, 0) == SWIG_OK) {
+	if (cptr) *cptr = (char *) vptr;
+	if (psize) *psize = vptr ? (strlen((char *)vptr) + 1) : 0;
+	if (alloc) *alloc = SWIG_OLDOBJ;
+	return SWIG_OK;
+      }
+    }
+  }
+  return SWIG_TypeError;
+}
+
+
+
+
+
+SWIGINTERN int
+SWIG_AsVal_double (PyObject *obj, double *val)
+{
+  int res = SWIG_TypeError;
+  if (PyFloat_Check(obj)) {
+    if (val) *val = PyFloat_AsDouble(obj);
+    return SWIG_OK;
+#if PY_VERSION_HEX < 0x03000000
+  } else if (PyInt_Check(obj)) {
+    if (val) *val = (double) PyInt_AsLong(obj);
+    return SWIG_OK;
+#endif
+  } else if (PyLong_Check(obj)) {
+    double v = PyLong_AsDouble(obj);
+    if (!PyErr_Occurred()) {
+      if (val) *val = v;
+      return SWIG_OK;
+    } else {
+      PyErr_Clear();
+    }
+  }
+#ifdef SWIG_PYTHON_CAST_MODE
+  {
+    int dispatch = 0;
+    double d = PyFloat_AsDouble(obj);
+    if (!PyErr_Occurred()) {
+      if (val) *val = d;
+      return SWIG_AddCast(SWIG_OK);
+    } else {
+      PyErr_Clear();
+    }
+    if (!dispatch) {
+      long v = PyLong_AsLong(obj);
+      if (!PyErr_Occurred()) {
+	if (val) *val = v;
+	return SWIG_AddCast(SWIG_AddCast(SWIG_OK));
+      } else {
+	PyErr_Clear();
+      }
+    }
+  }
+#endif
+  return res;
+}
+
+
+#include <float.h>
+
+
+#include <math.h>
+
+
+SWIGINTERNINLINE int
+SWIG_CanCastAsInteger(double *d, double min, double max) {
+  double x = *d;
+  if ((min <= x && x <= max)) {
+   double fx = floor(x);
+   double cx = ceil(x);
+   double rd =  ((x - fx) < 0.5) ? fx : cx; /* simple rint */
+   if ((errno == EDOM) || (errno == ERANGE)) {
+     errno = 0;
+   } else {
+     double summ, reps, diff;
+     if (rd < x) {
+       diff = x - rd;
+     } else if (rd > x) {
+       diff = rd - x;
+     } else {
+       return 1;
+     }
+     summ = rd + x;
+     reps = diff/summ;
+     if (reps < 8*DBL_EPSILON) {
+       *d = rd;
+       return 1;
+     }
+   }
+  }
+  return 0;
+}
+
+
+SWIGINTERN int
+SWIG_AsVal_unsigned_SS_long (PyObject *obj, unsigned long *val) 
+{
+#if PY_VERSION_HEX < 0x03000000
+  if (PyInt_Check(obj)) {
+    long v = PyInt_AsLong(obj);
+    if (v >= 0) {
+      if (val) *val = v;
+      return SWIG_OK;
+    } else {
+      return SWIG_OverflowError;
+    }
+  } else
+#endif
+  if (PyLong_Check(obj)) {
+    unsigned long v = PyLong_AsUnsignedLong(obj);
+    if (!PyErr_Occurred()) {
+      if (val) *val = v;
+      return SWIG_OK;
+    } else {
+      PyErr_Clear();
+      return SWIG_OverflowError;
+    }
+  }
+#ifdef SWIG_PYTHON_CAST_MODE
+  {
+    int dispatch = 0;
+    unsigned long v = PyLong_AsUnsignedLong(obj);
+    if (!PyErr_Occurred()) {
+      if (val) *val = v;
+      return SWIG_AddCast(SWIG_OK);
+    } else {
+      PyErr_Clear();
+    }
+    if (!dispatch) {
+      double d;
+      int res = SWIG_AddCast(SWIG_AsVal_double (obj,&d));
+      if (SWIG_IsOK(res) && SWIG_CanCastAsInteger(&d, 0, ULONG_MAX)) {
+	if (val) *val = (unsigned long)(d);
+	return res;
+      }
+    }
+  }
+#endif
+  return SWIG_TypeError;
+}
+
+
+#include <limits.h>
+#if !defined(SWIG_NO_LLONG_MAX)
+# if !defined(LLONG_MAX) && defined(__GNUC__) && defined (__LONG_LONG_MAX__)
+#   define LLONG_MAX __LONG_LONG_MAX__
+#   define LLONG_MIN (-LLONG_MAX - 1LL)
+#   define ULLONG_MAX (LLONG_MAX * 2ULL + 1ULL)
+# endif
+#endif
+
+
+#if defined(LLONG_MAX) && !defined(SWIG_LONG_LONG_AVAILABLE)
+#  define SWIG_LONG_LONG_AVAILABLE
+#endif
+
+
+#ifdef SWIG_LONG_LONG_AVAILABLE
+SWIGINTERN int
+SWIG_AsVal_unsigned_SS_long_SS_long (PyObject *obj, unsigned long long *val)
+{
+  int res = SWIG_TypeError;
+  if (PyLong_Check(obj)) {
+    unsigned long long v = PyLong_AsUnsignedLongLong(obj);
+    if (!PyErr_Occurred()) {
+      if (val) *val = v;
+      return SWIG_OK;
+    } else {
+      PyErr_Clear();
+      res = SWIG_OverflowError;
+    }
+  } else {
+    unsigned long v;
+    res = SWIG_AsVal_unsigned_SS_long (obj,&v);
+    if (SWIG_IsOK(res)) {
+      if (val) *val = v;
+      return res;
+    }
+  }
+#ifdef SWIG_PYTHON_CAST_MODE
+  {
+    const double mant_max = 1LL << DBL_MANT_DIG;
+    double d;
+    res = SWIG_AsVal_double (obj,&d);
+    if (SWIG_IsOK(res) && !SWIG_CanCastAsInteger(&d, 0, mant_max))
+      return SWIG_OverflowError;
+    if (SWIG_IsOK(res) && SWIG_CanCastAsInteger(&d, 0, mant_max)) {
+      if (val) *val = (unsigned long long)(d);
+      return SWIG_AddCast(res);
+    }
+    res = SWIG_TypeError;
+  }
+#endif
+  return res;
+}
+#endif
+
+
+SWIGINTERNINLINE int
+SWIG_AsVal_size_t (PyObject * obj, size_t *val)
+{
+  int res = SWIG_TypeError;
+#ifdef SWIG_LONG_LONG_AVAILABLE
+  if (sizeof(size_t) <= sizeof(unsigned long)) {
+#endif
+    unsigned long v;
+    res = SWIG_AsVal_unsigned_SS_long (obj, val ? &v : 0);
+    if (SWIG_IsOK(res) && val) *val = static_cast< size_t >(v);
+#ifdef SWIG_LONG_LONG_AVAILABLE
+  } else if (sizeof(size_t) <= sizeof(unsigned long long)) {
+    unsigned long long v;
+    res = SWIG_AsVal_unsigned_SS_long_SS_long (obj, val ? &v : 0);
+    if (SWIG_IsOK(res) && val) *val = static_cast< size_t >(v);
+  }
+#endif
+  return res;
+}
+
+
+  #define SWIG_From_long   PyInt_FromLong 
+
+
+SWIGINTERNINLINE PyObject* 
+SWIG_From_unsigned_SS_long  (unsigned long value)
+{
+  return (value > LONG_MAX) ?
+    PyLong_FromUnsignedLong(value) : PyInt_FromLong(static_cast< long >(value));
+}
+
+
+#ifdef SWIG_LONG_LONG_AVAILABLE
+SWIGINTERNINLINE PyObject* 
+SWIG_From_unsigned_SS_long_SS_long  (unsigned long long value)
+{
+  return (value > LONG_MAX) ?
+    PyLong_FromUnsignedLongLong(value) : PyInt_FromLong(static_cast< long >(value));
+}
+#endif
+
+
+SWIGINTERNINLINE PyObject *
+SWIG_From_size_t  (size_t value)
+{    
+#ifdef SWIG_LONG_LONG_AVAILABLE
+  if (sizeof(size_t) <= sizeof(unsigned long)) {
+#endif
+    return SWIG_From_unsigned_SS_long  (static_cast< unsigned long >(value));
+#ifdef SWIG_LONG_LONG_AVAILABLE
+  } else {
+    /* assume sizeof(size_t) <= sizeof(unsigned long long) */
+    return SWIG_From_unsigned_SS_long_SS_long  (static_cast< unsigned long long >(value));
+  }
+#endif
+}
+
+
+SWIGINTERNINLINE PyObject *
+SWIG_FromCharPtrAndSize(const char* carray, size_t size)
+{
+  if (carray) {
+    if (size > INT_MAX) {
+      swig_type_info* pchar_descriptor = SWIG_pchar_descriptor();
+      return pchar_descriptor ? 
+	SWIG_InternalNewPointerObj(const_cast< char * >(carray), pchar_descriptor, 0) : SWIG_Py_Void();
+    } else {
+#if PY_VERSION_HEX >= 0x03000000
+#if defined(SWIG_PYTHON_STRICT_BYTE_CHAR)
+      return PyBytes_FromStringAndSize(carray, static_cast< Py_ssize_t >(size));
+#else
+#if PY_VERSION_HEX >= 0x03010000
+      return PyUnicode_DecodeUTF8(carray, static_cast< Py_ssize_t >(size), "surrogateescape");
+#else
+      return PyUnicode_FromStringAndSize(carray, static_cast< Py_ssize_t >(size));
+#endif
+#endif
+#else
+      return PyString_FromStringAndSize(carray, static_cast< Py_ssize_t >(size));
+#endif
+    }
+  } else {
+    return SWIG_Py_Void();
+  }
+}
+
+
+SWIGINTERNINLINE PyObject * 
+SWIG_FromCharPtr(const char *cptr)
+{ 
+  return SWIG_FromCharPtrAndSize(cptr, (cptr ? strlen(cptr) : 0));
+}
+
+
+SWIGINTERNINLINE PyObject*
+  SWIG_From_bool  (bool value)
+{
+  return PyBool_FromLong(value ? 1 : 0);
+}
+
+
+SWIGINTERNINLINE PyObject *
+SWIG_From_std_string  (const std::string& s)
+{
+  return SWIG_FromCharPtrAndSize(s.data(), s.size());
+}
 
 
 SWIGINTERNINLINE PyObject*
@@ -3121,9 +4015,1487 @@ SWIGINTERNINLINE PyObject*
   return PyInt_FromLong((long) value);
 }
 
+
+
+/* ---------------------------------------------------
+ * C++ director class methods
+ * --------------------------------------------------- */
+
+#include "Base_wrap.h"
+
+SwigDirector_StateComputation::SwigDirector_StateComputation(PyObject *self): wallaroo::StateComputation(), Swig::Director(self) {
+  SWIG_DIRECTOR_RGTR((wallaroo::StateComputation *)this, this); 
+}
+
+
+
+
+SwigDirector_StateComputation::~SwigDirector_StateComputation() {
+}
+
+uint64_t SwigDirector_StateComputation::hash() const {
+  void *swig_argp ;
+  int swig_res = 0 ;
+  
+  uint64_t c_result;
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 0;
+  const char *const swig_method_name = "hash";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, NULL, NULL);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *) "hash", NULL);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.hash'");
+    }
+  }
+  swig_res = SWIG_ConvertPtr(result,&swig_argp,SWIGTYPE_p_uint64_t,  0  | 0);
+  if (!SWIG_IsOK(swig_res)) {
+    Swig::DirectorTypeMismatchException::raise(SWIG_ErrorType(SWIG_ArgError(swig_res)), "in output value of type '""uint64_t""'");
+  }
+  c_result = *(reinterpret_cast< uint64_t * >(swig_argp));
+  if (SWIG_IsNewObj(swig_res)) delete reinterpret_cast< uint64_t * >(swig_argp);
+  return (uint64_t) c_result;
+}
+
+
+uint64_t SwigDirector_StateComputation::partition_index() const {
+  void *swig_argp ;
+  int swig_res = 0 ;
+  
+  uint64_t c_result;
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 1;
+  const char *const swig_method_name = "partition_index";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, NULL, NULL);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *) "partition_index", NULL);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.partition_index'");
+    }
+  }
+  swig_res = SWIG_ConvertPtr(result,&swig_argp,SWIGTYPE_p_uint64_t,  0  | 0);
+  if (!SWIG_IsOK(swig_res)) {
+    Swig::DirectorTypeMismatchException::raise(SWIG_ErrorType(SWIG_ArgError(swig_res)), "in output value of type '""uint64_t""'");
+  }
+  c_result = *(reinterpret_cast< uint64_t * >(swig_argp));
+  if (SWIG_IsNewObj(swig_res)) delete reinterpret_cast< uint64_t * >(swig_argp);
+  return (uint64_t) c_result;
+}
+
+
+void SwigDirector_StateComputation::deserialize(char *bytes) {
+  swig::SwigVar_PyObject obj0;
+  obj0 = SWIG_FromCharPtr((const char *)bytes);
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 2;
+  const char *const swig_method_name = "deserialize";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, (char *)"(O)" ,(PyObject *)obj0);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *)"deserialize", (char *)"(O)" ,(PyObject *)obj0);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.deserialize'");
+    }
+  }
+}
+
+
+void SwigDirector_StateComputation::serialize(char *bytes, size_t nsz_) {
+  swig::SwigVar_PyObject obj0;
+  obj0 = SWIG_FromCharPtr((const char *)bytes);
+  swig::SwigVar_PyObject obj1;
+  obj1 = SWIG_From_size_t(static_cast< size_t >(nsz_));
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 3;
+  const char *const swig_method_name = "serialize";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, (char *)"(OO)" ,(PyObject *)obj0,(PyObject *)obj1);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *)"serialize", (char *)"(OO)" ,(PyObject *)obj0,(PyObject *)obj1);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.serialize'");
+    }
+  }
+}
+
+
+size_t SwigDirector_StateComputation::serialize_get_size() {
+  size_t c_result;
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 4;
+  const char *const swig_method_name = "serialize_get_size";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, NULL, NULL);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *) "serialize_get_size", NULL);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.serialize_get_size'");
+    }
+  }
+  size_t swig_val;
+  int swig_res = SWIG_AsVal_size_t(result, &swig_val);
+  if (!SWIG_IsOK(swig_res)) {
+    Swig::DirectorTypeMismatchException::raise(SWIG_ErrorType(SWIG_ArgError(swig_res)), "in output value of type '""size_t""'");
+  }
+  c_result = static_cast< size_t >(swig_val);
+  return (size_t) c_result;
+}
+
+
+char const *SwigDirector_StateComputation::name() {
+  int res ;
+  char *buf = 0 ;
+  int alloc = SWIG_NEWOBJ ;
+  
+  char *c_result;
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 5;
+  const char *const swig_method_name = "name";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, NULL, NULL);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *) "name", NULL);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.name'");
+    }
+  }
+  res = SWIG_AsCharPtrAndSize(result, &buf, NULL, &alloc);
+  if (!SWIG_IsOK(res)) {
+    Swig::DirectorTypeMismatchException::raise(SWIG_ErrorType(SWIG_ArgError(res)), "in output value of type '""char const *""'");
+  }
+  if (alloc == SWIG_NEWOBJ) {
+    swig_acquire_ownership_array(buf);
+  }
+  c_result = reinterpret_cast< char * >(buf);
+  return (char const *) c_result;
+}
+
+
+void *SwigDirector_StateComputation::compute(wallaroo::Data *input_, wallaroo::StateChangeRepository *state_change_repository_, void *state_change_Respository_helper_, wallaroo::State *state_, void *none) {
+  void *argp ;
+  int res ;
+  
+  void *c_result;
+  swig::SwigVar_PyObject obj0;
+  obj0 = SWIG_NewPointerObj(SWIG_as_voidptr(input_), SWIGTYPE_p_wallaroo__Data,  0 );
+  swig::SwigVar_PyObject obj1;
+  obj1 = SWIG_NewPointerObj(SWIG_as_voidptr(state_change_repository_), SWIGTYPE_p_wallaroo__StateChangeRepository,  0 );
+  swig::SwigVar_PyObject obj2;
+  obj2 = SWIG_NewPointerObj(SWIG_as_voidptr(state_change_Respository_helper_), SWIGTYPE_p_void,  0 );
+  swig::SwigVar_PyObject obj3;
+  obj3 = SWIG_NewPointerObj(SWIG_as_voidptr(state_), SWIGTYPE_p_wallaroo__State,  0 );
+  swig::SwigVar_PyObject obj4;
+  obj4 = SWIG_NewPointerObj(SWIG_as_voidptr(none), SWIGTYPE_p_void,  0 );
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 6;
+  const char *const swig_method_name = "compute";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, (char *)"(OOOOO)" ,(PyObject *)obj0,(PyObject *)obj1,(PyObject *)obj2,(PyObject *)obj3,(PyObject *)obj4);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *)"compute", (char *)"(OOOOO)" ,(PyObject *)obj0,(PyObject *)obj1,(PyObject *)obj2,(PyObject *)obj3,(PyObject *)obj4);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.compute'");
+    }
+  }
+  res = SWIG_ConvertPtr(result, &argp, 0, 0);
+  if (!SWIG_IsOK(res)) {
+    Swig::DirectorTypeMismatchException::raise(SWIG_ErrorType(SWIG_ArgError(res)), "in output value of type '""void *""'");
+  }
+  c_result = reinterpret_cast< void * >(argp);
+  return (void *) c_result;
+}
+
+
+size_t SwigDirector_StateComputation::get_number_of_state_change_builders() {
+  size_t c_result;
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 7;
+  const char *const swig_method_name = "get_number_of_state_change_builders";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, NULL, NULL);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *) "get_number_of_state_change_builders", NULL);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.get_number_of_state_change_builders'");
+    }
+  }
+  size_t swig_val;
+  int swig_res = SWIG_AsVal_size_t(result, &swig_val);
+  if (!SWIG_IsOK(swig_res)) {
+    Swig::DirectorTypeMismatchException::raise(SWIG_ErrorType(SWIG_ArgError(swig_res)), "in output value of type '""size_t""'");
+  }
+  c_result = static_cast< size_t >(swig_val);
+  return (size_t) c_result;
+}
+
+
+wallaroo::StateChangeBuilder *SwigDirector_StateComputation::get_state_change_builder(size_t idx_) {
+  void *swig_argp ;
+  int swig_res ;
+  swig_owntype own ;
+  
+  wallaroo::StateChangeBuilder *c_result;
+  swig::SwigVar_PyObject obj0;
+  obj0 = SWIG_From_size_t(static_cast< size_t >(idx_));
+  if (!swig_get_self()) {
+    Swig::DirectorException::raise("'self' uninitialized, maybe you forgot to call StateComputation.__init__.");
+  }
+#if defined(SWIG_PYTHON_DIRECTOR_VTABLE)
+  const size_t swig_method_index = 8;
+  const char *const swig_method_name = "get_state_change_builder";
+  PyObject *method = swig_get_method(swig_method_index, swig_method_name);
+  swig::SwigVar_PyObject result = PyObject_CallFunction(method, (char *)"(O)" ,(PyObject *)obj0);
+#else
+  swig::SwigVar_PyObject result = PyObject_CallMethod(swig_get_self(), (char *)"get_state_change_builder", (char *)"(O)" ,(PyObject *)obj0);
+#endif
+  if (!result) {
+    PyObject *error = PyErr_Occurred();
+    if (error) {
+      Swig::DirectorMethodException::raise("Error detected when calling 'StateComputation.get_state_change_builder'");
+    }
+  }
+  swig_res = SWIG_ConvertPtrAndOwn(result, &swig_argp, SWIGTYPE_p_wallaroo__StateChangeBuilder,  0  | SWIG_POINTER_DISOWN, &own);
+  if (!SWIG_IsOK(swig_res)) {
+    Swig::DirectorTypeMismatchException::raise(SWIG_ErrorType(SWIG_ArgError(swig_res)), "in output value of type '""wallaroo::StateChangeBuilder *""'");
+  }
+  c_result = reinterpret_cast< wallaroo::StateChangeBuilder * >(swig_argp);
+  swig_acquire_ownership_obj(SWIG_as_voidptr(c_result), own /* & TODO: SWIG_POINTER_OWN */);
+  return (wallaroo::StateChangeBuilder *) c_result;
+}
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+SWIGINTERN PyObject *_wrap_delete_Hashable(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Hashable *arg1 = (wallaroo::Hashable *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_Hashable",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Hashable, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_Hashable" "', argument " "1"" of type '" "wallaroo::Hashable *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Hashable * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_Hashable_hash(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Hashable *arg1 = (wallaroo::Hashable *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  uint64_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:Hashable_hash",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Hashable, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Hashable_hash" "', argument " "1"" of type '" "wallaroo::Hashable const *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Hashable * >(argp1);
+  result = ((wallaroo::Hashable const *)arg1)->hash();
+  resultobj = SWIG_NewPointerObj((new uint64_t(static_cast< const uint64_t& >(result))), SWIGTYPE_p_uint64_t, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_Hashable_partition_index(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Hashable *arg1 = (wallaroo::Hashable *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  uint64_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:Hashable_partition_index",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Hashable, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Hashable_partition_index" "', argument " "1"" of type '" "wallaroo::Hashable const *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Hashable * >(argp1);
+  result = ((wallaroo::Hashable const *)arg1)->partition_index();
+  resultobj = SWIG_NewPointerObj((new uint64_t(static_cast< const uint64_t& >(result))), SWIGTYPE_p_uint64_t, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_Hashable(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Hashable *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)":new_Hashable")) SWIG_fail;
+  result = (wallaroo::Hashable *)new wallaroo::Hashable();
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__Hashable, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *Hashable_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__Hashable, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_Serializable_deserialize(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Serializable *arg1 = (wallaroo::Serializable *) 0 ;
+  char *arg2 = (char *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:Serializable_deserialize",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Serializable, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Serializable_deserialize" "', argument " "1"" of type '" "wallaroo::Serializable *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Serializable * >(argp1);
+  res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "Serializable_deserialize" "', argument " "2"" of type '" "char *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  (arg1)->deserialize(arg2);
+  resultobj = SWIG_Py_Void();
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_Serializable_serialize(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Serializable *arg1 = (wallaroo::Serializable *) 0 ;
+  char *arg2 = (char *) 0 ;
+  size_t arg3 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  size_t val3 ;
+  int ecode3 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OOO:Serializable_serialize",&obj0,&obj1,&obj2)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Serializable, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Serializable_serialize" "', argument " "1"" of type '" "wallaroo::Serializable *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Serializable * >(argp1);
+  res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "Serializable_serialize" "', argument " "2"" of type '" "char *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  ecode3 = SWIG_AsVal_size_t(obj2, &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "Serializable_serialize" "', argument " "3"" of type '" "size_t""'");
+  } 
+  arg3 = static_cast< size_t >(val3);
+  (arg1)->serialize(arg2,arg3);
+  resultobj = SWIG_Py_Void();
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_Serializable_serialize_get_size(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Serializable *arg1 = (wallaroo::Serializable *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  size_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:Serializable_serialize_get_size",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Serializable, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Serializable_serialize_get_size" "', argument " "1"" of type '" "wallaroo::Serializable *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Serializable * >(argp1);
+  result = (arg1)->serialize_get_size();
+  resultobj = SWIG_From_size_t(static_cast< size_t >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_Serializable(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Serializable *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)":new_Serializable")) SWIG_fail;
+  result = (wallaroo::Serializable *)new wallaroo::Serializable();
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__Serializable, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_Serializable(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Serializable *arg1 = (wallaroo::Serializable *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_Serializable",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Serializable, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_Serializable" "', argument " "1"" of type '" "wallaroo::Serializable *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Serializable * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *Serializable_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__Serializable, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_delete_ManagedObject(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::ManagedObject *arg1 = (wallaroo::ManagedObject *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_ManagedObject",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__ManagedObject, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_ManagedObject" "', argument " "1"" of type '" "wallaroo::ManagedObject *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::ManagedObject * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_ManagedObject(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::ManagedObject *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)":new_ManagedObject")) SWIG_fail;
+  result = (wallaroo::ManagedObject *)new wallaroo::ManagedObject();
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__ManagedObject, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *ManagedObject_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__ManagedObject, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_delete_Data(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Data *arg1 = (wallaroo::Data *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_Data",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Data, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_Data" "', argument " "1"" of type '" "wallaroo::Data *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Data * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_Data(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Data *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)":new_Data")) SWIG_fail;
+  result = (wallaroo::Data *)new wallaroo::Data();
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__Data, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *Data_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__Data, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_delete_EncodableData(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::EncodableData *arg1 = (wallaroo::EncodableData *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_EncodableData",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__EncodableData, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_EncodableData" "', argument " "1"" of type '" "wallaroo::EncodableData *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::EncodableData * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_EncodableData_encode_get_size(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::EncodableData *arg1 = (wallaroo::EncodableData *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  size_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:EncodableData_encode_get_size",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__EncodableData, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "EncodableData_encode_get_size" "', argument " "1"" of type '" "wallaroo::EncodableData *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::EncodableData * >(argp1);
+  result = (arg1)->encode_get_size();
+  resultobj = SWIG_From_size_t(static_cast< size_t >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_EncodableData_encode(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::EncodableData *arg1 = (wallaroo::EncodableData *) 0 ;
+  char *arg2 = (char *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:EncodableData_encode",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__EncodableData, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "EncodableData_encode" "', argument " "1"" of type '" "wallaroo::EncodableData *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::EncodableData * >(argp1);
+  res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "EncodableData_encode" "', argument " "2"" of type '" "char *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  (arg1)->encode(arg2);
+  resultobj = SWIG_Py_Void();
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *EncodableData_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__EncodableData, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_new_State(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::State *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)":new_State")) SWIG_fail;
+  result = (wallaroo::State *)new wallaroo::State();
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__State, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_State(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::State *arg1 = (wallaroo::State *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_State",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__State, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_State" "', argument " "1"" of type '" "wallaroo::State *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::State * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *State_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__State, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_StateChange_name(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  char *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:StateChange_name",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_name" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  result = (char *)(arg1)->name();
+  resultobj = SWIG_FromCharPtr((const char *)result);
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_apply(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  wallaroo::State *arg2 = (wallaroo::State *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:StateChange_apply",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_apply" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  res2 = SWIG_ConvertPtr(obj1, &argp2,SWIGTYPE_p_wallaroo__State, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "StateChange_apply" "', argument " "2"" of type '" "wallaroo::State *""'"); 
+  }
+  arg2 = reinterpret_cast< wallaroo::State * >(argp2);
+  (arg1)->apply(arg2);
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_to_log_entry(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  char *arg2 = (char *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:StateChange_to_log_entry",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_to_log_entry" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "StateChange_to_log_entry" "', argument " "2"" of type '" "char *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  (arg1)->to_log_entry(arg2);
+  resultobj = SWIG_Py_Void();
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_get_log_entry_size(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  size_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:StateChange_get_log_entry_size",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_get_log_entry_size" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  result = (arg1)->get_log_entry_size();
+  resultobj = SWIG_From_size_t(static_cast< size_t >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_get_log_entry_size_header_size(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  size_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:StateChange_get_log_entry_size_header_size",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_get_log_entry_size_header_size" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  result = (arg1)->get_log_entry_size_header_size();
+  resultobj = SWIG_From_size_t(static_cast< size_t >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_read_log_entry_size_header(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  char *arg2 = (char *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  size_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:StateChange_read_log_entry_size_header",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_read_log_entry_size_header" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "StateChange_read_log_entry_size_header" "', argument " "2"" of type '" "char *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  result = (arg1)->read_log_entry_size_header(arg2);
+  resultobj = SWIG_From_size_t(static_cast< size_t >(result));
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_read_log_entry(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  char *arg2 = (char *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  bool result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:StateChange_read_log_entry",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_read_log_entry" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "StateChange_read_log_entry" "', argument " "2"" of type '" "char *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  result = (bool)(arg1)->read_log_entry(arg2);
+  resultobj = SWIG_From_bool(static_cast< bool >(result));
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_id(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  uint64_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:StateChange_id",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_id" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  result = (arg1)->id();
+  resultobj = SWIG_NewPointerObj((new uint64_t(static_cast< const uint64_t& >(result))), SWIGTYPE_p_uint64_t, SWIG_POINTER_OWN |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateChange_str(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  string result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:StateChange_str",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChange_str" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  result = (arg1)->str();
+  resultobj = SWIG_From_std_string(static_cast< std::string >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_StateChange(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChange *arg1 = (wallaroo::StateChange *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_StateChange",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChange, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_StateChange" "', argument " "1"" of type '" "wallaroo::StateChange *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChange * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *StateChange_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__StateChange, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_StateChangeRepository_lookup_by_name(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChangeRepository *arg1 = (wallaroo::StateChangeRepository *) 0 ;
+  char *arg2 = (char *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int res2 ;
+  char *buf2 = 0 ;
+  int alloc2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  wallaroo::StateChange *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:StateChangeRepository_lookup_by_name",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChangeRepository, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChangeRepository_lookup_by_name" "', argument " "1"" of type '" "wallaroo::StateChangeRepository *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChangeRepository * >(argp1);
+  res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, NULL, &alloc2);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "StateChangeRepository_lookup_by_name" "', argument " "2"" of type '" "char const *""'");
+  }
+  arg2 = reinterpret_cast< char * >(buf2);
+  result = (wallaroo::StateChange *)(arg1)->lookup_by_name((char const *)arg2);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return resultobj;
+fail:
+  if (alloc2 == SWIG_NEWOBJ) delete[] buf2;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_StateChangeRepository(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChangeRepository *arg1 = (wallaroo::StateChangeRepository *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_StateChangeRepository",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChangeRepository, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_StateChangeRepository" "', argument " "1"" of type '" "wallaroo::StateChangeRepository *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChangeRepository * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *StateChangeRepository_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__StateChangeRepository, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_StateChangeBuilder_build(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChangeBuilder *arg1 = (wallaroo::StateChangeBuilder *) 0 ;
+  uint64_t arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 ;
+  int res2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  wallaroo::StateChange *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:StateChangeBuilder_build",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChangeBuilder, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateChangeBuilder_build" "', argument " "1"" of type '" "wallaroo::StateChangeBuilder *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChangeBuilder * >(argp1);
+  {
+    res2 = SWIG_ConvertPtr(obj1, &argp2, SWIGTYPE_p_uint64_t,  0  | 0);
+    if (!SWIG_IsOK(res2)) {
+      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "StateChangeBuilder_build" "', argument " "2"" of type '" "uint64_t""'"); 
+    }  
+    if (!argp2) {
+      SWIG_exception_fail(SWIG_ValueError, "invalid null reference " "in method '" "StateChangeBuilder_build" "', argument " "2"" of type '" "uint64_t""'");
+    } else {
+      uint64_t * temp = reinterpret_cast< uint64_t * >(argp2);
+      arg2 = *temp;
+      if (SWIG_IsNewObj(res2)) delete temp;
+    }
+  }
+  result = (wallaroo::StateChange *)(arg1)->build(arg2);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_StateChangeBuilder(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateChangeBuilder *arg1 = (wallaroo::StateChangeBuilder *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_StateChangeBuilder",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateChangeBuilder, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_StateChangeBuilder" "', argument " "1"" of type '" "wallaroo::StateChangeBuilder *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateChangeBuilder * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *StateChangeBuilder_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__StateChangeBuilder, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_Computation_name(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Computation *arg1 = (wallaroo::Computation *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  char *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:Computation_name",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Computation, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Computation_name" "', argument " "1"" of type '" "wallaroo::Computation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Computation * >(argp1);
+  result = (char *)(arg1)->name();
+  resultobj = SWIG_FromCharPtr((const char *)result);
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_Computation_compute(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Computation *arg1 = (wallaroo::Computation *) 0 ;
+  wallaroo::Data *arg2 = (wallaroo::Data *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  wallaroo::Data *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:Computation_compute",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Computation, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "Computation_compute" "', argument " "1"" of type '" "wallaroo::Computation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Computation * >(argp1);
+  res2 = SWIG_ConvertPtr(obj1, &argp2,SWIGTYPE_p_wallaroo__Data, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "Computation_compute" "', argument " "2"" of type '" "wallaroo::Data *""'"); 
+  }
+  arg2 = reinterpret_cast< wallaroo::Data * >(argp2);
+  result = (wallaroo::Data *)(arg1)->compute(arg2);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__Data, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_Computation(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::Computation *arg1 = (wallaroo::Computation *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_Computation",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__Computation, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_Computation" "', argument " "1"" of type '" "wallaroo::Computation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::Computation * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *Computation_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__Computation, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
+SWIGINTERN PyObject *_wrap_StateComputation_name(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateComputation *arg1 = (wallaroo::StateComputation *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  Swig::Director *director = 0;
+  bool upcall = false;
+  char *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:StateComputation_name",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateComputation, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateComputation_name" "', argument " "1"" of type '" "wallaroo::StateComputation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateComputation * >(argp1);
+  director = SWIG_DIRECTOR_CAST(arg1);
+  upcall = (director && (director->swig_get_self()==obj0));
+  try {
+    if (upcall) {
+      Swig::DirectorPureVirtualException::raise("wallaroo::StateComputation::name");
+    } else {
+      result = (char *)(arg1)->name();
+    }
+  } catch (Swig::DirectorException&) {
+    SWIG_fail;
+  }
+  resultobj = SWIG_FromCharPtr((const char *)result);
+  if (director) {
+    director->swig_release_ownership(SWIG_as_voidptr(result));
+  }
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateComputation_compute(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateComputation *arg1 = (wallaroo::StateComputation *) 0 ;
+  wallaroo::Data *arg2 = (wallaroo::Data *) 0 ;
+  wallaroo::StateChangeRepository *arg3 = (wallaroo::StateChangeRepository *) 0 ;
+  void *arg4 = (void *) 0 ;
+  wallaroo::State *arg5 = (wallaroo::State *) 0 ;
+  void *arg6 = (void *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  void *argp3 = 0 ;
+  int res3 = 0 ;
+  int res4 ;
+  void *argp5 = 0 ;
+  int res5 = 0 ;
+  int res6 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  PyObject * obj3 = 0 ;
+  PyObject * obj4 = 0 ;
+  PyObject * obj5 = 0 ;
+  Swig::Director *director = 0;
+  bool upcall = false;
+  void *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OOOOOO:StateComputation_compute",&obj0,&obj1,&obj2,&obj3,&obj4,&obj5)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateComputation, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateComputation_compute" "', argument " "1"" of type '" "wallaroo::StateComputation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateComputation * >(argp1);
+  res2 = SWIG_ConvertPtr(obj1, &argp2,SWIGTYPE_p_wallaroo__Data, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "StateComputation_compute" "', argument " "2"" of type '" "wallaroo::Data *""'"); 
+  }
+  arg2 = reinterpret_cast< wallaroo::Data * >(argp2);
+  res3 = SWIG_ConvertPtr(obj2, &argp3,SWIGTYPE_p_wallaroo__StateChangeRepository, 0 |  0 );
+  if (!SWIG_IsOK(res3)) {
+    SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "StateComputation_compute" "', argument " "3"" of type '" "wallaroo::StateChangeRepository *""'"); 
+  }
+  arg3 = reinterpret_cast< wallaroo::StateChangeRepository * >(argp3);
+  res4 = SWIG_ConvertPtr(obj3,SWIG_as_voidptrptr(&arg4), 0, 0);
+  if (!SWIG_IsOK(res4)) {
+    SWIG_exception_fail(SWIG_ArgError(res4), "in method '" "StateComputation_compute" "', argument " "4"" of type '" "void *""'"); 
+  }
+  res5 = SWIG_ConvertPtr(obj4, &argp5,SWIGTYPE_p_wallaroo__State, 0 |  0 );
+  if (!SWIG_IsOK(res5)) {
+    SWIG_exception_fail(SWIG_ArgError(res5), "in method '" "StateComputation_compute" "', argument " "5"" of type '" "wallaroo::State *""'"); 
+  }
+  arg5 = reinterpret_cast< wallaroo::State * >(argp5);
+  res6 = SWIG_ConvertPtr(obj5,SWIG_as_voidptrptr(&arg6), 0, 0);
+  if (!SWIG_IsOK(res6)) {
+    SWIG_exception_fail(SWIG_ArgError(res6), "in method '" "StateComputation_compute" "', argument " "6"" of type '" "void *""'"); 
+  }
+  director = SWIG_DIRECTOR_CAST(arg1);
+  upcall = (director && (director->swig_get_self()==obj0));
+  try {
+    if (upcall) {
+      Swig::DirectorPureVirtualException::raise("wallaroo::StateComputation::compute");
+    } else {
+      result = (void *)(arg1)->compute(arg2,arg3,arg4,arg5,arg6);
+    }
+  } catch (Swig::DirectorException&) {
+    SWIG_fail;
+  }
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_void, 0 |  0 );
+  if (director) {
+    SWIG_AcquirePtr(resultobj, director->swig_release_ownership(SWIG_as_voidptr(result)));
+  }
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateComputation_get_number_of_state_change_builders(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateComputation *arg1 = (wallaroo::StateComputation *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  Swig::Director *director = 0;
+  bool upcall = false;
+  size_t result;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:StateComputation_get_number_of_state_change_builders",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateComputation, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateComputation_get_number_of_state_change_builders" "', argument " "1"" of type '" "wallaroo::StateComputation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateComputation * >(argp1);
+  director = SWIG_DIRECTOR_CAST(arg1);
+  upcall = (director && (director->swig_get_self()==obj0));
+  try {
+    if (upcall) {
+      Swig::DirectorPureVirtualException::raise("wallaroo::StateComputation::get_number_of_state_change_builders");
+    } else {
+      result = (arg1)->get_number_of_state_change_builders();
+    }
+  } catch (Swig::DirectorException&) {
+    SWIG_fail;
+  }
+  resultobj = SWIG_From_size_t(static_cast< size_t >(result));
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_StateComputation_get_state_change_builder(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateComputation *arg1 = (wallaroo::StateComputation *) 0 ;
+  size_t arg2 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  size_t val2 ;
+  int ecode2 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  Swig::Director *director = 0;
+  bool upcall = false;
+  wallaroo::StateChangeBuilder *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:StateComputation_get_state_change_builder",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateComputation, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "StateComputation_get_state_change_builder" "', argument " "1"" of type '" "wallaroo::StateComputation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateComputation * >(argp1);
+  ecode2 = SWIG_AsVal_size_t(obj1, &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "StateComputation_get_state_change_builder" "', argument " "2"" of type '" "size_t""'");
+  } 
+  arg2 = static_cast< size_t >(val2);
+  director = SWIG_DIRECTOR_CAST(arg1);
+  upcall = (director && (director->swig_get_self()==obj0));
+  try {
+    if (upcall) {
+      Swig::DirectorPureVirtualException::raise("wallaroo::StateComputation::get_state_change_builder");
+    } else {
+      result = (wallaroo::StateChangeBuilder *)(arg1)->get_state_change_builder(arg2);
+    }
+  } catch (Swig::DirectorException&) {
+    SWIG_fail;
+  }
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__StateChangeBuilder, 0 |  0 );
+  if (director) {
+    SWIG_AcquirePtr(resultobj, director->swig_release_ownership(SWIG_as_voidptr(result)));
+  }
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_StateComputation(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  PyObject *arg1 = (PyObject *) 0 ;
+  PyObject * obj0 = 0 ;
+  wallaroo::StateComputation *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:new_StateComputation",&obj0)) SWIG_fail;
+  arg1 = obj0;
+  if ( arg1 != Py_None ) {
+    /* subclassed */
+    result = (wallaroo::StateComputation *)new SwigDirector_StateComputation(arg1); 
+  } else {
+    SWIG_SetErrorMsg(PyExc_RuntimeError,"accessing abstract class or protected constructor"); 
+    SWIG_fail;
+  }
+  
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__StateComputation, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_delete_StateComputation(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateComputation *arg1 = (wallaroo::StateComputation *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:delete_StateComputation",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateComputation, SWIG_POINTER_DISOWN |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "delete_StateComputation" "', argument " "1"" of type '" "wallaroo::StateComputation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateComputation * >(argp1);
+  delete arg1;
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_disown_StateComputation(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  wallaroo::StateComputation *arg1 = (wallaroo::StateComputation *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  PyObject * obj0 = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"O:disown_StateComputation",&obj0)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_wallaroo__StateComputation, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "disown_StateComputation" "', argument " "1"" of type '" "wallaroo::StateComputation *""'"); 
+  }
+  arg1 = reinterpret_cast< wallaroo::StateComputation * >(argp1);
+  {
+    Swig::Director *director = SWIG_DIRECTOR_CAST(arg1);
+    if (director) director->swig_disown();
+  }
+  
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *StateComputation_swigregister(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *obj;
+  if (!PyArg_ParseTuple(args,(char *)"O:swigregister", &obj)) return NULL;
+  SWIG_TypeNewClientData(SWIGTYPE_p_wallaroo__StateComputation, SWIG_NewClientData(obj));
+  return SWIG_Py_Void();
+}
+
 SWIGINTERN PyObject *_wrap_new_Base(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
   PyObject *resultobj = 0;
   Base *result = 0 ;
@@ -3206,38 +5578,357 @@ SWIGINTERN PyObject *CheckOrder_swigregister(PyObject *SWIGUNUSEDPARM(self), PyO
   return SWIG_Py_Void();
 }
 
+SWIGINTERN PyObject *_wrap_printKevin(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  
+  if (!PyArg_ParseTuple(args,(char *)":printKevin")) SWIG_fail;
+  printKevin();
+  resultobj = SWIG_Py_Void();
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_w_stateful_computation_get_return(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  void *arg1 = (void *) 0 ;
+  wallaroo::Data *arg2 = (wallaroo::Data *) 0 ;
+  void *arg3 = (void *) 0 ;
+  int res1 ;
+  void *argp2 = 0 ;
+  int res2 = 0 ;
+  int res3 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  void *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OOO:w_stateful_computation_get_return",&obj0,&obj1,&obj2)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0,SWIG_as_voidptrptr(&arg1), 0, 0);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "w_stateful_computation_get_return" "', argument " "1"" of type '" "void *""'"); 
+  }
+  res2 = SWIG_ConvertPtr(obj1, &argp2,SWIGTYPE_p_wallaroo__Data, 0 |  0 );
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "w_stateful_computation_get_return" "', argument " "2"" of type '" "wallaroo::Data *""'"); 
+  }
+  arg2 = reinterpret_cast< wallaroo::Data * >(argp2);
+  res3 = SWIG_ConvertPtr(obj2,SWIG_as_voidptrptr(&arg3), 0, 0);
+  if (!SWIG_IsOK(res3)) {
+    SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "w_stateful_computation_get_return" "', argument " "3"" of type '" "void *""'"); 
+  }
+  result = (void *)w_stateful_computation_get_return(arg1,arg2,arg3);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_void, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_w_state_change_repository_lookup_by_name(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  void *arg1 = (void *) 0 ;
+  void *arg2 = (void *) 0 ;
+  char *arg3 = (char *) 0 ;
+  int res1 ;
+  int res2 ;
+  int res3 ;
+  char *buf3 = 0 ;
+  int alloc3 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  void *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OOO:w_state_change_repository_lookup_by_name",&obj0,&obj1,&obj2)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0,SWIG_as_voidptrptr(&arg1), 0, 0);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "w_state_change_repository_lookup_by_name" "', argument " "1"" of type '" "void *""'"); 
+  }
+  res2 = SWIG_ConvertPtr(obj1,SWIG_as_voidptrptr(&arg2), 0, 0);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "w_state_change_repository_lookup_by_name" "', argument " "2"" of type '" "void *""'"); 
+  }
+  res3 = SWIG_AsCharPtrAndSize(obj2, &buf3, NULL, &alloc3);
+  if (!SWIG_IsOK(res3)) {
+    SWIG_exception_fail(SWIG_ArgError(res3), "in method '" "w_state_change_repository_lookup_by_name" "', argument " "3"" of type '" "char const *""'");
+  }
+  arg3 = reinterpret_cast< char * >(buf3);
+  result = (void *)w_state_change_repository_lookup_by_name(arg1,arg2,(char const *)arg3);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_void, 0 |  0 );
+  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
+  return resultobj;
+fail:
+  if (alloc3 == SWIG_NEWOBJ) delete[] buf3;
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_w_state_change_get_state_change_object(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  void *arg1 = (void *) 0 ;
+  void *arg2 = (void *) 0 ;
+  int res1 ;
+  int res2 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  wallaroo::StateChange *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OO:w_state_change_get_state_change_object",&obj0,&obj1)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0,SWIG_as_voidptrptr(&arg1), 0, 0);
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "w_state_change_get_state_change_object" "', argument " "1"" of type '" "void *""'"); 
+  }
+  res2 = SWIG_ConvertPtr(obj1,SWIG_as_voidptrptr(&arg2), 0, 0);
+  if (!SWIG_IsOK(res2)) {
+    SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "w_state_change_get_state_change_object" "', argument " "2"" of type '" "void *""'"); 
+  }
+  result = (wallaroo::StateChange *)w_state_change_get_state_change_object(arg1,arg2);
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_wallaroo__StateChange, 0 |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
 static PyMethodDef SwigMethods[] = {
 	 { (char *)"SWIG_PyInstanceMethod_New", (PyCFunction)SWIG_PyInstanceMethod_New, METH_O, NULL},
+	 { (char *)"delete_Hashable", _wrap_delete_Hashable, METH_VARARGS, NULL},
+	 { (char *)"Hashable_hash", _wrap_Hashable_hash, METH_VARARGS, NULL},
+	 { (char *)"Hashable_partition_index", _wrap_Hashable_partition_index, METH_VARARGS, NULL},
+	 { (char *)"new_Hashable", _wrap_new_Hashable, METH_VARARGS, NULL},
+	 { (char *)"Hashable_swigregister", Hashable_swigregister, METH_VARARGS, NULL},
+	 { (char *)"Serializable_deserialize", _wrap_Serializable_deserialize, METH_VARARGS, NULL},
+	 { (char *)"Serializable_serialize", _wrap_Serializable_serialize, METH_VARARGS, NULL},
+	 { (char *)"Serializable_serialize_get_size", _wrap_Serializable_serialize_get_size, METH_VARARGS, NULL},
+	 { (char *)"new_Serializable", _wrap_new_Serializable, METH_VARARGS, NULL},
+	 { (char *)"delete_Serializable", _wrap_delete_Serializable, METH_VARARGS, NULL},
+	 { (char *)"Serializable_swigregister", Serializable_swigregister, METH_VARARGS, NULL},
+	 { (char *)"delete_ManagedObject", _wrap_delete_ManagedObject, METH_VARARGS, NULL},
+	 { (char *)"new_ManagedObject", _wrap_new_ManagedObject, METH_VARARGS, NULL},
+	 { (char *)"ManagedObject_swigregister", ManagedObject_swigregister, METH_VARARGS, NULL},
+	 { (char *)"delete_Data", _wrap_delete_Data, METH_VARARGS, NULL},
+	 { (char *)"new_Data", _wrap_new_Data, METH_VARARGS, NULL},
+	 { (char *)"Data_swigregister", Data_swigregister, METH_VARARGS, NULL},
+	 { (char *)"delete_EncodableData", _wrap_delete_EncodableData, METH_VARARGS, NULL},
+	 { (char *)"EncodableData_encode_get_size", _wrap_EncodableData_encode_get_size, METH_VARARGS, NULL},
+	 { (char *)"EncodableData_encode", _wrap_EncodableData_encode, METH_VARARGS, NULL},
+	 { (char *)"EncodableData_swigregister", EncodableData_swigregister, METH_VARARGS, NULL},
+	 { (char *)"new_State", _wrap_new_State, METH_VARARGS, NULL},
+	 { (char *)"delete_State", _wrap_delete_State, METH_VARARGS, NULL},
+	 { (char *)"State_swigregister", State_swigregister, METH_VARARGS, NULL},
+	 { (char *)"StateChange_name", _wrap_StateChange_name, METH_VARARGS, NULL},
+	 { (char *)"StateChange_apply", _wrap_StateChange_apply, METH_VARARGS, NULL},
+	 { (char *)"StateChange_to_log_entry", _wrap_StateChange_to_log_entry, METH_VARARGS, NULL},
+	 { (char *)"StateChange_get_log_entry_size", _wrap_StateChange_get_log_entry_size, METH_VARARGS, NULL},
+	 { (char *)"StateChange_get_log_entry_size_header_size", _wrap_StateChange_get_log_entry_size_header_size, METH_VARARGS, NULL},
+	 { (char *)"StateChange_read_log_entry_size_header", _wrap_StateChange_read_log_entry_size_header, METH_VARARGS, NULL},
+	 { (char *)"StateChange_read_log_entry", _wrap_StateChange_read_log_entry, METH_VARARGS, NULL},
+	 { (char *)"StateChange_id", _wrap_StateChange_id, METH_VARARGS, NULL},
+	 { (char *)"StateChange_str", _wrap_StateChange_str, METH_VARARGS, NULL},
+	 { (char *)"delete_StateChange", _wrap_delete_StateChange, METH_VARARGS, NULL},
+	 { (char *)"StateChange_swigregister", StateChange_swigregister, METH_VARARGS, NULL},
+	 { (char *)"StateChangeRepository_lookup_by_name", _wrap_StateChangeRepository_lookup_by_name, METH_VARARGS, NULL},
+	 { (char *)"delete_StateChangeRepository", _wrap_delete_StateChangeRepository, METH_VARARGS, NULL},
+	 { (char *)"StateChangeRepository_swigregister", StateChangeRepository_swigregister, METH_VARARGS, NULL},
+	 { (char *)"StateChangeBuilder_build", _wrap_StateChangeBuilder_build, METH_VARARGS, NULL},
+	 { (char *)"delete_StateChangeBuilder", _wrap_delete_StateChangeBuilder, METH_VARARGS, NULL},
+	 { (char *)"StateChangeBuilder_swigregister", StateChangeBuilder_swigregister, METH_VARARGS, NULL},
+	 { (char *)"Computation_name", _wrap_Computation_name, METH_VARARGS, NULL},
+	 { (char *)"Computation_compute", _wrap_Computation_compute, METH_VARARGS, NULL},
+	 { (char *)"delete_Computation", _wrap_delete_Computation, METH_VARARGS, NULL},
+	 { (char *)"Computation_swigregister", Computation_swigregister, METH_VARARGS, NULL},
+	 { (char *)"StateComputation_name", _wrap_StateComputation_name, METH_VARARGS, NULL},
+	 { (char *)"StateComputation_compute", _wrap_StateComputation_compute, METH_VARARGS, NULL},
+	 { (char *)"StateComputation_get_number_of_state_change_builders", _wrap_StateComputation_get_number_of_state_change_builders, METH_VARARGS, NULL},
+	 { (char *)"StateComputation_get_state_change_builder", _wrap_StateComputation_get_state_change_builder, METH_VARARGS, NULL},
+	 { (char *)"new_StateComputation", _wrap_new_StateComputation, METH_VARARGS, NULL},
+	 { (char *)"delete_StateComputation", _wrap_delete_StateComputation, METH_VARARGS, NULL},
+	 { (char *)"disown_StateComputation", _wrap_disown_StateComputation, METH_VARARGS, NULL},
+	 { (char *)"StateComputation_swigregister", StateComputation_swigregister, METH_VARARGS, NULL},
 	 { (char *)"new_Base", _wrap_new_Base, METH_VARARGS, NULL},
 	 { (char *)"delete_Base", _wrap_delete_Base, METH_VARARGS, NULL},
 	 { (char *)"Base_swigregister", Base_swigregister, METH_VARARGS, NULL},
 	 { (char *)"new_CheckOrder", _wrap_new_CheckOrder, METH_VARARGS, NULL},
 	 { (char *)"delete_CheckOrder", _wrap_delete_CheckOrder, METH_VARARGS, NULL},
 	 { (char *)"CheckOrder_swigregister", CheckOrder_swigregister, METH_VARARGS, NULL},
+	 { (char *)"printKevin", _wrap_printKevin, METH_VARARGS, NULL},
+	 { (char *)"w_stateful_computation_get_return", _wrap_w_stateful_computation_get_return, METH_VARARGS, NULL},
+	 { (char *)"w_state_change_repository_lookup_by_name", _wrap_w_state_change_repository_lookup_by_name, METH_VARARGS, NULL},
+	 { (char *)"w_state_change_get_state_change_object", _wrap_w_state_change_get_state_change_object, METH_VARARGS, NULL},
 	 { NULL, NULL, 0, NULL }
 };
 
 
 /* -------- TYPE CONVERSION AND EQUIVALENCE RULES (BEGIN) -------- */
 
+static void *_p_wallaroo__StateTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *)  ((wallaroo::State *) x));
+}
+static void *_p_wallaroo__StateChangeTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *)  ((wallaroo::StateChange *) x));
+}
+static void *_p_wallaroo__DataTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *)  ((wallaroo::Data *) x));
+}
+static void *_p_wallaroo__StateChangeRepositoryTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *)  ((wallaroo::StateChangeRepository *) x));
+}
+static void *_p_wallaroo__StateChangeBuilderTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *)  ((wallaroo::StateChangeBuilder *) x));
+}
+static void *_p_CheckOrderTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *) (wallaroo::StateComputation *) ((CheckOrder *) x));
+}
+static void *_p_wallaroo__EncodableDataTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *) (wallaroo::Data *) ((wallaroo::EncodableData *) x));
+}
+static void *_p_wallaroo__ComputationTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *)  ((wallaroo::Computation *) x));
+}
+static void *_p_wallaroo__StateComputationTo_p_wallaroo__ManagedObject(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::ManagedObject *)  ((wallaroo::StateComputation *) x));
+}
+static void *_p_CheckOrderTo_p_wallaroo__StateComputation(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::StateComputation *)  ((CheckOrder *) x));
+}
+static void *_p_wallaroo__StateTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *) ((wallaroo::State *) x));
+}
+static void *_p_wallaroo__StateChangeTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *) ((wallaroo::StateChange *) x));
+}
+static void *_p_wallaroo__DataTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *) ((wallaroo::Data *) x));
+}
+static void *_p_wallaroo__StateChangeRepositoryTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *) ((wallaroo::StateChangeRepository *) x));
+}
+static void *_p_wallaroo__StateChangeBuilderTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *) ((wallaroo::StateChangeBuilder *) x));
+}
+static void *_p_CheckOrderTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *)(wallaroo::StateComputation *) ((CheckOrder *) x));
+}
+static void *_p_wallaroo__ManagedObjectTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *)  ((wallaroo::ManagedObject *) x));
+}
+static void *_p_wallaroo__EncodableDataTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *)(wallaroo::Data *) ((wallaroo::EncodableData *) x));
+}
+static void *_p_wallaroo__ComputationTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *) ((wallaroo::Computation *) x));
+}
+static void *_p_wallaroo__StateComputationTo_p_wallaroo__Serializable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Serializable *) (wallaroo::ManagedObject *) ((wallaroo::StateComputation *) x));
+}
+static void *_p_wallaroo__EncodableDataTo_p_wallaroo__Data(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Data *)  ((wallaroo::EncodableData *) x));
+}
+static void *_p_wallaroo__StateTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *) ((wallaroo::State *) x));
+}
+static void *_p_wallaroo__StateChangeTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *) ((wallaroo::StateChange *) x));
+}
+static void *_p_wallaroo__DataTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *) ((wallaroo::Data *) x));
+}
+static void *_p_wallaroo__StateChangeRepositoryTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *) ((wallaroo::StateChangeRepository *) x));
+}
+static void *_p_wallaroo__StateChangeBuilderTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *) ((wallaroo::StateChangeBuilder *) x));
+}
+static void *_p_CheckOrderTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *)(wallaroo::StateComputation *) ((CheckOrder *) x));
+}
+static void *_p_wallaroo__SerializableTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *)  ((wallaroo::Serializable *) x));
+}
+static void *_p_wallaroo__ManagedObjectTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *) ((wallaroo::ManagedObject *) x));
+}
+static void *_p_wallaroo__EncodableDataTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *)(wallaroo::Data *) ((wallaroo::EncodableData *) x));
+}
+static void *_p_wallaroo__ComputationTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *) ((wallaroo::Computation *) x));
+}
+static void *_p_wallaroo__StateComputationTo_p_wallaroo__Hashable(void *x, int *SWIGUNUSEDPARM(newmemory)) {
+    return (void *)((wallaroo::Hashable *) (wallaroo::Serializable *)(wallaroo::ManagedObject *) ((wallaroo::StateComputation *) x));
+}
 static swig_type_info _swigt__p_Base = {"_p_Base", "Base *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_CheckOrder = {"_p_CheckOrder", "CheckOrder *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_char = {"_p_char", "char *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_uint64_t = {"_p_uint64_t", "uint64_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_void = {"_p_void", "void *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__Computation = {"_p_wallaroo__Computation", "wallaroo::Computation *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__Data = {"_p_wallaroo__Data", "wallaroo::Data *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__EncodableData = {"_p_wallaroo__EncodableData", "wallaroo::EncodableData *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__Hashable = {"_p_wallaroo__Hashable", "wallaroo::Hashable *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__ManagedObject = {"_p_wallaroo__ManagedObject", "wallaroo::ManagedObject *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__Serializable = {"_p_wallaroo__Serializable", "wallaroo::Serializable *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__State = {"_p_wallaroo__State", "wallaroo::State *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__StateChange = {"_p_wallaroo__StateChange", "wallaroo::StateChange *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__StateChangeBuilder = {"_p_wallaroo__StateChangeBuilder", "wallaroo::StateChangeBuilder *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__StateChangeRepository = {"_p_wallaroo__StateChangeRepository", "wallaroo::StateChangeRepository *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_wallaroo__StateComputation = {"_p_wallaroo__StateComputation", "wallaroo::StateComputation *", 0, 0, (void*)0, 0};
 
 static swig_type_info *swig_type_initial[] = {
   &_swigt__p_Base,
   &_swigt__p_CheckOrder,
   &_swigt__p_char,
+  &_swigt__p_uint64_t,
+  &_swigt__p_void,
+  &_swigt__p_wallaroo__Computation,
+  &_swigt__p_wallaroo__Data,
+  &_swigt__p_wallaroo__EncodableData,
+  &_swigt__p_wallaroo__Hashable,
+  &_swigt__p_wallaroo__ManagedObject,
+  &_swigt__p_wallaroo__Serializable,
+  &_swigt__p_wallaroo__State,
+  &_swigt__p_wallaroo__StateChange,
+  &_swigt__p_wallaroo__StateChangeBuilder,
+  &_swigt__p_wallaroo__StateChangeRepository,
+  &_swigt__p_wallaroo__StateComputation,
 };
 
 static swig_cast_info _swigc__p_Base[] = {  {&_swigt__p_Base, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_CheckOrder[] = {  {&_swigt__p_CheckOrder, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_char[] = {  {&_swigt__p_char, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_uint64_t[] = {  {&_swigt__p_uint64_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_void[] = {  {&_swigt__p_void, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__Computation[] = {  {&_swigt__p_wallaroo__Computation, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__Data[] = {  {&_swigt__p_wallaroo__Data, 0, 0, 0},  {&_swigt__p_wallaroo__EncodableData, _p_wallaroo__EncodableDataTo_p_wallaroo__Data, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__EncodableData[] = {  {&_swigt__p_wallaroo__EncodableData, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__Hashable[] = {  {&_swigt__p_wallaroo__StateChange, _p_wallaroo__StateChangeTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__State, _p_wallaroo__StateTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__StateChangeRepository, _p_wallaroo__StateChangeRepositoryTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__StateChangeBuilder, _p_wallaroo__StateChangeBuilderTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_CheckOrder, _p_CheckOrderTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__Serializable, _p_wallaroo__SerializableTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__ManagedObject, _p_wallaroo__ManagedObjectTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__Data, _p_wallaroo__DataTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__Hashable, 0, 0, 0},  {&_swigt__p_wallaroo__EncodableData, _p_wallaroo__EncodableDataTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__Computation, _p_wallaroo__ComputationTo_p_wallaroo__Hashable, 0, 0},  {&_swigt__p_wallaroo__StateComputation, _p_wallaroo__StateComputationTo_p_wallaroo__Hashable, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__ManagedObject[] = {  {&_swigt__p_wallaroo__StateChange, _p_wallaroo__StateChangeTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_wallaroo__State, _p_wallaroo__StateTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_wallaroo__StateChangeRepository, _p_wallaroo__StateChangeRepositoryTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_wallaroo__StateChangeBuilder, _p_wallaroo__StateChangeBuilderTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_CheckOrder, _p_CheckOrderTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_wallaroo__ManagedObject, 0, 0, 0},  {&_swigt__p_wallaroo__Data, _p_wallaroo__DataTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_wallaroo__EncodableData, _p_wallaroo__EncodableDataTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_wallaroo__Computation, _p_wallaroo__ComputationTo_p_wallaroo__ManagedObject, 0, 0},  {&_swigt__p_wallaroo__StateComputation, _p_wallaroo__StateComputationTo_p_wallaroo__ManagedObject, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__Serializable[] = {  {&_swigt__p_wallaroo__StateChange, _p_wallaroo__StateChangeTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__State, _p_wallaroo__StateTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__StateChangeRepository, _p_wallaroo__StateChangeRepositoryTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__StateChangeBuilder, _p_wallaroo__StateChangeBuilderTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_CheckOrder, _p_CheckOrderTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__Serializable, 0, 0, 0},  {&_swigt__p_wallaroo__ManagedObject, _p_wallaroo__ManagedObjectTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__Data, _p_wallaroo__DataTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__EncodableData, _p_wallaroo__EncodableDataTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__Computation, _p_wallaroo__ComputationTo_p_wallaroo__Serializable, 0, 0},  {&_swigt__p_wallaroo__StateComputation, _p_wallaroo__StateComputationTo_p_wallaroo__Serializable, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__State[] = {  {&_swigt__p_wallaroo__State, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__StateChange[] = {  {&_swigt__p_wallaroo__StateChange, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__StateChangeBuilder[] = {  {&_swigt__p_wallaroo__StateChangeBuilder, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__StateChangeRepository[] = {  {&_swigt__p_wallaroo__StateChangeRepository, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_wallaroo__StateComputation[] = {  {&_swigt__p_CheckOrder, _p_CheckOrderTo_p_wallaroo__StateComputation, 0, 0},  {&_swigt__p_wallaroo__StateComputation, 0, 0, 0},{0, 0, 0, 0}};
 
 static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_Base,
   _swigc__p_CheckOrder,
   _swigc__p_char,
+  _swigc__p_uint64_t,
+  _swigc__p_void,
+  _swigc__p_wallaroo__Computation,
+  _swigc__p_wallaroo__Data,
+  _swigc__p_wallaroo__EncodableData,
+  _swigc__p_wallaroo__Hashable,
+  _swigc__p_wallaroo__ManagedObject,
+  _swigc__p_wallaroo__Serializable,
+  _swigc__p_wallaroo__State,
+  _swigc__p_wallaroo__StateChange,
+  _swigc__p_wallaroo__StateChangeBuilder,
+  _swigc__p_wallaroo__StateChangeRepository,
+  _swigc__p_wallaroo__StateComputation,
 };
 
 
