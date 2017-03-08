@@ -152,7 +152,7 @@ actor Main
   new create(env: Env) =>
     try
       var initial_nbbo_file_path =
-        "../../demos/marketspread/initial-nbbo-fixish.msg"
+        "/home/kgoldstein/dev/buffy/demos/marketspread/initial-nbbo-fixish.msg"
       var symbols_file_path: (String | None) = None
       var test_level: TestType = AllTest
       let options = Options(env.args, false)

@@ -114,7 +114,7 @@ private:
 public:
   NbboMessage(string& symbol_, string& transit_time_, double bid_price_, double offer_price_);
   virtual uint64_t get_partition();
-
+  string get_symbol() { return _symbol; }
   double bid_price() { return _bid_price; }
   double offer_price() { return _offer_price; }
   double mid() {return (_bid_price + _offer_price) / 2.0; }

@@ -202,95 +202,15 @@ void* getNullPtr()
 #include <market-spread-cpp.hpp>
 NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_)
 {
-  NbboMessage* msg = dynamic_cast<NbboMessage*>(data_);
-  if ( msg!=nullptr )
-    cout << "NBBO PRC:(" << msg->bid_price() << "x"<<msg->offer_price() << ")" << endl;
-  return msg;
+  if ( data_ == nullptr ) 
+    return nullptr;
+  return dynamic_cast <NbboMessage*>(data_);;
 }
 
 
-
-/*
-int main(int argc_, char** argv_)
+SymbolDataStateChange* castToSymbolDataSC(wallaroo::StateChange* data_)
 {
-  PyObject *pName, *pModule, *pDict, *pFunc, *pFuncName;
-  PyObject *pArgs, *pValue;
-  char *cstrret;
-
-  string modname = "call_function";
-  //string funcname = "multiply";
-  string funcname = "testBase";
-
-  Py_SetProgramName("Kevin");
-  Py_Initialize();
-
-  PyObject *sys = PyImport_ImportModule("sys");
-  PyObject *path = PyObject_GetAttrString(sys, "path");
-  PyList_Append(path, PyString_FromString("/home/kgoldstein/dev/c++/msc2p3/2"));
-  pName = PyString_FromString(modname.c_str());
-  pFuncName = PyString_FromString(funcname.c_str());
-  pModule = PyImport_Import(pName);
-  Py_DECREF(pName);
-  if ( pModule != nullptr )
-  {
-    pFunc = PyObject_GetAttrString(pModule, funcname.c_str());
-    if ( pFunc && PyCallable_Check(pFunc))
-    {
-      PyObject* rv = PyObject_CallObject(pFunc, NULL);
-      if ( rv!=nullptr )
-      {
-
-	try
-	{
-	  cout << "RV is NOT NULL" << endl;
-	  void* desc = 0;
-	  desc = SWIG_TypeQuery("Base *");
-	  cout << "DESC!:" << desc << endl;
-	  
-	  Base* b;
-	  if (SWIG_ConvertPtr(rv, (void**)&b, 0, 0) == -1 )
-	  {
-	    cout << "CONVERSION FAILED!" << endl;
-	  }
-	  else
-	  {
-	    cout << "GOOD!" << endl;
-            time_point<Clock> start;
-            time_point<Clock> end;
-size_t sz=0;
-while(true){
-sz+=1;
-start = Clock::now();
-b->compute(); 
-end = Clock::now();
-nanoseconds diff = duration_cast<nanoseconds>(end-start);
-cout << diff.count() << endl;
-//if (sz%50==0 ) cout << endl;
+  if ( data_ == nullptr ) 
+    return nullptr;
+  return dynamic_cast<SymbolDataStateChange*>(data_);
 }
-	    //PyObject_CallMethod(rv,"compute", "");
-	  }
-	  
-	}
-	catch (exception& e_)
-	{
-	  cout << e_.what() << endl;
-	}
-      }
-      else
-      {
-	cout << "RV is null" << endl;
-      }
-    }
-  }
-  else
-  {
-    cout << "module not found!" << endl;
-  }
-
-
-
-  Py_Finalize();
-  return 0;
-}
-
-*/

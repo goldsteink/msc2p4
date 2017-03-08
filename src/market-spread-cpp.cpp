@@ -374,6 +374,7 @@ void *CheckOrder::compute(wallaroo::Data *input_, wallaroo::StateChangeRepositor
 
   if (symbol_data->should_reject_trades)
   {
+    cout << "Rejecting: " << *(order_message->symbol()) << endl;
     // std::cerr << "rejected" << std::endl;
     // TODO: not getting time here, is this a problem?
     OrderResult *order_result = new OrderResult(order_message, symbol_data->last_bid, symbol_data->last_offer, 0);

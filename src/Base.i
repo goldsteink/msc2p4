@@ -14,14 +14,15 @@
   #include "market-spread-cpp.hpp"
   extern void printKevin();
   extern void* getNullPtr();
-  extern void *w_stateful_computation_get_return(void *state_change_repository_helper_, 
+  extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
+  extern SymbolDataStateChange* castToSymbolDataSC(wallaroo::StateChange* data_);
+  extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
 						 wallaroo::Data* data_, 
 						 void *state_change_);
-  extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
-  extern void *w_state_change_repository_lookup_by_name(void *state_change_repository_helper_, 
+  extern void* w_state_change_repository_lookup_by_name(void *state_change_repository_helper_, 
 							void *state_change_repository_, 
 							const char *name_);
-  //extern StateChange *w_state_change_get_state_change_object(void *state_change_repository_helper_, void *state_change_);
+  extern wallaroo::StateChange* w_state_change_get_state_change_object(void *state_change_repository_helper_, void *state_change_);
 
 %}
 
@@ -50,12 +51,14 @@
 
 extern void printKevin();
 extern void* getNullPtr();
+extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
+extern SymbolDataStateChange* castToSymbolDataSC(wallaroo::StateChange* data_);
 extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
 					       wallaroo::Data* data_, 
 					       void *state_change_);
-extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
-extern void *w_state_change_repository_lookup_by_name(void *state_change_repository_helper_, 
+extern void* w_state_change_repository_lookup_by_name(void *state_change_repository_helper_, 
 						      void *state_change_repository_, 
 						      const char *name_);
-//extern wallaroo::StateChange *w_state_change_get_state_change_object(void *state_change_repository_helper_, void *state_change_);
+extern wallaroo::StateChange* w_state_change_get_state_change_object(void *state_change_repository_helper_, void *state_change_);
+
 
