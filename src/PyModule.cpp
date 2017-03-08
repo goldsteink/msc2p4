@@ -5,7 +5,6 @@
 #include <exception>
 
 #include <PyModule.hpp>
-#include <Base.hpp>
 #include <swigpyrun.h>
 
 
@@ -153,7 +152,7 @@ StateComputation* PyModule::getNbboCheck() const
   // determine if the function is there
   //
   string getNbboCheckFunctionName = "getNbboChecker";
-  string getNbboCheckFunctionName = "printMe";
+  //string getNbboCheckFunctionName = "printMe";
   PyObject* pFunc = PyObject_GetAttrString(_pyModule, getNbboCheckFunctionName.c_str());
   if ( pFunc && PyCallable_Check(pFunc) )
   {
@@ -189,6 +188,24 @@ void printKevin()
 {
   cout << "Kevin" << endl;
   return;
+}
+
+
+
+void* getNullPtr()
+{
+  return nullptr;
+}
+
+
+
+#include <market-spread-cpp.hpp>
+NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_)
+{
+  NbboMessage* msg = dynamic_cast<NbboMessage*>(data_);
+  if ( msg!=nullptr )
+    cout << "NBBO PRC:(" << msg->bid_price() << "x"<<msg->offer_price() << ")" << endl;
+  return msg;
 }
 
 

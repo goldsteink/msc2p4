@@ -9,8 +9,20 @@
   #include "/usr/local/include/WallarooCppApi/StateChangeRepository.hpp"
   #include "/usr/local/include/WallarooCppApi/StateChangeBuilder.hpp"
   #include "/usr/local/include/WallarooCppApi/Computation.hpp"
-  #include "Base.hpp"
+  #include "/usr/local/include/WallarooCppApi/ApiHooks.hpp"
+//  #include "Base.hpp"
+  #include "market-spread-cpp.hpp"
   extern void printKevin();
+  extern void* getNullPtr();
+  extern void *w_stateful_computation_get_return(void *state_change_repository_helper_, 
+						 wallaroo::Data* data_, 
+						 void *state_change_);
+  extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
+  extern void *w_state_change_repository_lookup_by_name(void *state_change_repository_helper_, 
+							void *state_change_repository_, 
+							const char *name_);
+  //extern StateChange *w_state_change_get_state_change_object(void *state_change_repository_helper_, void *state_change_);
+
 %}
 
 
@@ -30,13 +42,20 @@
 %include "/usr/local/include/WallarooCppApi/StateChangeRepository.hpp"
 %include "/usr/local/include/WallarooCppApi/StateChangeBuilder.hpp"
 %include "/usr/local/include/WallarooCppApi/Computation.hpp"
-
+%include "/usr/local/include/WallarooCppApi/ApiHooks.hpp"
 
  // this project
-%include "Base.hpp"
+ //%include "Base.hpp"
+%include "market-spread-cpp.hpp"
 
 extern void printKevin();
-extern void *w_stateful_computation_get_return(void *state_change_repository_helper_, wallaroo::Data* data_, void *state_change_);
-extern void *w_state_change_repository_lookup_by_name(void *state_change_repository_helper_, void *state_change_repository_, const char *name_);
-extern wallaroo::StateChange *w_state_change_get_state_change_object(void *state_change_repository_helper_, void *state_change_);
+extern void* getNullPtr();
+extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
+					       wallaroo::Data* data_, 
+					       void *state_change_);
+extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
+extern void *w_state_change_repository_lookup_by_name(void *state_change_repository_helper_, 
+						      void *state_change_repository_, 
+						      const char *name_);
+//extern wallaroo::StateChange *w_state_change_get_state_change_object(void *state_change_repository_helper_, void *state_change_);
 

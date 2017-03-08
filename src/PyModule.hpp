@@ -9,6 +9,7 @@
 #include <string>
 
 #include <WallarooCppApi/Computation.hpp>
+#include "market-spread-cpp.hpp"
 
 using namespace std;
 using namespace wallaroo;
@@ -31,8 +32,8 @@ public:
   
 public:
   StateComputation* getNbboCheck() const;
-  
 };
+
 
 
 #endif // __PYMODULE_HPP__

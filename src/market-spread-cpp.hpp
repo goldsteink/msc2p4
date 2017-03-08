@@ -206,6 +206,7 @@ class UpdateNbboNoOutput: public wallaroo::StateComputation
   virtual wallaroo::StateChangeBuilder *get_state_change_builder(size_t idx_) { return new SymbolDataStateChangeBuilder(); }
 };
 
+/*
 class UpdateNbbo: public wallaroo::StateComputation
 {
   const char *name() { return "Update NBBO"; }
@@ -214,7 +215,7 @@ class UpdateNbbo: public wallaroo::StateComputation
   virtual size_t get_number_of_state_change_builders() { return 1;}
   virtual wallaroo::StateChangeBuilder *get_state_change_builder(size_t idx_) { return new SymbolDataStateChangeBuilder(); }
 };
-
+*/
 
 class OrderResult: public wallaroo::EncodableData
 {
