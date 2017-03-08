@@ -37,12 +37,52 @@ function printAndExit()
 
 
 
+if [ $# -gt 0 ] ; then
+    if [ "$1" == "-h" ] || [ "$1" == "?" ] || [ "$1" == "-?" ] ; then
+	echoWhite "Parmas:";
+	echoWhite "   <none>"
+	echoWhite "   swig"
+	echoWhite "   cpp"
+	echoWhite "   pony"
+	echoWhite "   link"
+    fi
+fi
+
+
+SWIG="no"
+CPP="no"
+PONY="no"
+LINK="no"
+if [ $# -eq 0 ] ; then
+    echoBlue "Building whole project"
+    SWIG="yes"
+    CPP="yes"
+    PONY="yes"
+    LINK="yes"
+else
+    for param in $@
+    do
+	if [[ "$param" == "swig" ]]; then
+	    echoBlue "Only building SWIG"
+	    SWIG="yes"
+	elif [[ "$param" == "cpp" ]]; then
+	    echoBlue "Only building CPP"
+	    CPP="yes"
+	elif [[ "$param" == "pony" ]]; then
+	    echoBlue "Only building PONY"
+	    PONY="yes"
+	elif [[ "$param" == "link" ]]; then
+	    echoBlue "Only running LINKER"
+	    LINK="yes"
+	fi
+    done
+fi
 
 if [ ! -d $build_dir ] ; then
     mkdir -p $build_dir
 fi
 
-if [ "$1" == "" ] || [ "$1" == "swig" ] ; then
+if [ "$SWIG" == "yes" ] ; then
     echoBlue -n "Building SWIG..." > $BUILD_LOG 2>&1
     echoBlue "Building SWIG..."
 
@@ -54,7 +94,7 @@ if [ "$1" == "" ] || [ "$1" == "swig" ] ; then
 fi
 
 
-if [ "$1" == "" ] || [ "$1" == "cpp" ] ; then
+if [ "$CPP" == "yes" ] ; then
     echoBlue "Building C++ Python Module... ">> $BUILD_LOG 2>&1
     echoBlue "Building C++ Python Module..."
     debugargs="-g3 -ggdb -O0"
@@ -80,7 +120,7 @@ fi
 
 
 pony_obj=src/src.o
-if [ "$1" == "" ] || [ "$1" == "pony" ] ; then
+if [ "$PONY" == "yes" ] ; then
     echoBlue "Building pony" >> $BUILD_LOG 2>&1
     echoBlue "Building pony"
 
@@ -104,10 +144,11 @@ fi
 
 
 pushd ./src >> /dev/null 2>&1
-if [ "$1" == "" ] || [ "$1" == "link" ] ; then
+if [ "$LINK" == "yes" ] ; then
     echoBlue "Pony/C++/Swig linking..." >> $BUILD_LOG 2>&1
     echoBlue "Pony/C++/Swig linking..."
     c++ -o $PRJSRC/msc2p4 -O0 -g -march=native -mcx16 -fuse-ld=gold $PRJSRC/*.o \
+	/usr/local/lib/WallarooCppApi/libwallaroo.a \
 	-L$WALL_HOME -Wl,-rpath,$WALL_HOME \
 	-L$WALL_API_DIR -Wl,-rpath,$WALL_API_DIR \
 	-L$PRJSRC -Wl,-rpath,$PRJSRC \
