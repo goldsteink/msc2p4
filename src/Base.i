@@ -16,6 +16,7 @@
   extern void* getNullPtr();
   extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
   extern SymbolDataStateChange* castToSymbolDataSC(wallaroo::StateChange* data_);
+  extern void updateStateChange(SymbolDataStateChange* sc_, bool a_, double b_, double c_);
   extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
 						 wallaroo::Data* data_, 
 						 void *state_change_);
@@ -53,6 +54,7 @@ extern void printKevin();
 extern void* getNullPtr();
 extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
 extern SymbolDataStateChange* castToSymbolDataSC(wallaroo::StateChange* data_);
+extern void updateStateChange(SymbolDataStateChange* sc_, bool a_, double b_, double c_);
 extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
 					       wallaroo::Data* data_, 
 					       void *state_change_);

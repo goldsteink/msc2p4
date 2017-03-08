@@ -204,7 +204,7 @@ NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_)
 {
   if ( data_ == nullptr ) 
     return nullptr;
-  return dynamic_cast <NbboMessage*>(data_);;
+  return static_cast <NbboMessage*>(data_);;
 }
 
 
@@ -212,5 +212,14 @@ SymbolDataStateChange* castToSymbolDataSC(wallaroo::StateChange* data_)
 {
   if ( data_ == nullptr ) 
     return nullptr;
-  return dynamic_cast<SymbolDataStateChange*>(data_);
+  return static_cast<SymbolDataStateChange*>(data_);
+}
+
+
+void updateStateChange(SymbolDataStateChange* sc_, bool a_, double b_, double c_)
+{
+  if ( sc_==nullptr ) 
+    return;
+
+  sc_->update(a_, b_, c_);
 }

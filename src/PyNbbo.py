@@ -69,11 +69,10 @@ class PyUpdateNbbo(MSPY.StateComputation):
                                                                 stateChangeRepo_, 
                                                                 "symbol data state change");
             sc_pure = MSPY.w_state_change_get_state_change_object(stateChageRepoHelper_, sch)
-            print sc_pure
-            sdsc = MSPY.castToSymbolDataSC(sc_pure)
-            sc =  MSPY.w_stateful_computation_get_return(stateChageRepoHelper_, MSPY.getNullPtr(), sch)
-            #sdsc.update(shouldRejectTrades, nbbo.bid_price(), nbbo.offer_price())
-            return sc
+            #print sc_pure
+            #sdsc = MSPY.castToSymbolDataSC(sc_pure)
+            #MSPY.updateStateChange(sdsc, shouldRejectTrades, nbbo.bid_price(), nbbo.offer_price())
+            return MSPY.w_stateful_computation_get_return(stateChageRepoHelper_, MSPY.getNullPtr(), sch)
         except (NameError,RuntimeError) as err:
             print "Error: {}".format(err)
             return MSPY.w_stateful_computation_get_return(stateChageRepoHelper_,
