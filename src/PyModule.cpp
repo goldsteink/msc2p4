@@ -5,7 +5,7 @@
 #include <exception>
 
 #include <PyModule.hpp>
-#include <swigpyrun.h>
+//#include <swigpyrun.h>
 
 
 
@@ -120,6 +120,19 @@ void PyModule::printDebug(string str_) const
 }
 
 
+string PyModule::printError(string err_, string method_, int line_)
+{
+  stringstream out;
+  out << err_;
+  out << " @ ";
+  out << method_;
+  out << ":";
+  out << line_;
+  cerr << out.str() << endl;
+  return out.str();
+}
+
+
 
 PyModule& PyModule::getInstance(string path_, string module_)
 {
@@ -130,6 +143,14 @@ PyModule& PyModule::getInstance(string path_, string module_)
 
 
 
+
+
+/**
+ * get a state computation object
+ * basically, I am instantiating a Python Class that extends
+ * my state computation object
+ */
+
 StateComputation* PyModule::getNbboCheck() const
 {
   //
@@ -137,7 +158,8 @@ StateComputation* PyModule::getNbboCheck() const
   //
   if ( _pyModule == nullptr )
   {
-    stringstream errStr ("getNbboCheck called with no module! Called out of order?");
+    stringstream errStr;
+    errStr << "getNbboCheck called with no module! Called out of order?";
     errStr << "\n";
     errStr << __PRETTY_FUNCTION__;
     errStr << ":";
@@ -184,6 +206,68 @@ StateComputation* PyModule::getNbboCheck() const
 
 
 
+
+
+/**
+ * get a state change object
+ * basically, I am instantiating a Python Class that extends
+ * my state change object
+ */
+StateChange* PyModule::getSymbolDataStateChange(size_t idx_) const
+{
+  //
+  // some basics
+  //
+  if ( _pyModule == nullptr )
+  {
+    stringstream errStr;
+    errStr << "getNbboCheck called with no module! Called out of order?";
+    errStr << "\n";
+    errStr << __PRETTY_FUNCTION__;
+    errStr << ":";
+    errStr << __LINE__;
+    cerr << errStr.str() << endl; 
+    throw runtime_error(errStr.str()); 
+    return nullptr;
+  }
+
+
+  //
+  // determine if the function is there
+  //
+  string getNbboCheckFunctionName = "getStateChangeBuilder";
+  PyObject* pFunc = PyObject_GetAttrString(_pyModule, getNbboCheckFunctionName.c_str());
+  if ( pFunc && PyCallable_Check(pFunc) )
+  {
+    PyObject* rv = PyObject_CallObject(pFunc, NULL);
+    StateChange* functionRV = nullptr;
+    if ( rv!=nullptr )
+    {
+      if ( SWIG_ConvertPtr(rv, (void**)&functionRV, 0, 0)==-1 )
+      {
+	cerr << "Unable to convert pointer" << endl;
+	cerr << __PRETTY_FUNCTION__ << ":" << __LINE__ << endl;
+      }
+      else
+      {
+	printDebug("Converted function pointer");
+	return functionRV;
+      }
+    }
+    else
+    {
+      cerr << "Function call failed!" << __PRETTY_FUNCTION__ << ":"<< __LINE__ <<  endl;
+    }
+  }
+  else
+  {
+    cerr << "Unable to call specified function" << endl;
+  }
+}
+
+
+
+
 void printKevin()
 {
   cout << "Kevin" << endl;
@@ -208,18 +292,4 @@ NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_)
 }
 
 
-SymbolDataStateChange* castToSymbolDataSC(wallaroo::StateChange* data_)
-{
-  if ( data_ == nullptr ) 
-    return nullptr;
-  return static_cast<SymbolDataStateChange*>(data_);
-}
 
-
-void updateStateChange(SymbolDataStateChange* sc_, bool a_, double b_, double c_)
-{
-  if ( sc_==nullptr ) 
-    return;
-
-  sc_->update(a_, b_, c_);
-}

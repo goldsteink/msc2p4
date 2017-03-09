@@ -91,6 +91,10 @@ if [ "$SWIG" == "yes" ] ; then
 
     swig -shadow -cppext cpp -c++ -python src/Base.i >> $BUILD_LOG 2>&1
     printAndExit $? 1 "SWIG shadow classes"
+
+    echoGreen "Injecting verbose errors" >> $BUILD_LOG 2>&1
+    echoGreen "Injecting verbose errors"
+    . ./scrpt/inject.sh
 fi
 
 

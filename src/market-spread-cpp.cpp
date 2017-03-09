@@ -65,27 +65,20 @@ extern "C"
 
   extern wallaroo::StateComputation *get_update_nbbo_no_output()
   {
-    return new UpdateNbboNoOutput();
+    PyModule& pyMod = PyModule::getInstance();
+    return pyMod.getDerivedPythonClass<StateComputation*>("updateNbboNoOutpuotChecker");
+    //return new UpdateNbboNoOutput();
   }
 
   extern wallaroo::StateComputation *get_check_order()
   {
-/*#ifdef DEBUG
-    cout << "Inside: " << __PRETTY_FUNCTION__ << endl;
-#endif
-    PyModule& pyMod = PyModule::getInstance();
-    return pyMod.getNbboCheck();*/
     return new CheckOrder();
   }
 
   extern wallaroo::StateComputation *get_update_nbbo()
   {
-#ifdef DEBUG
-    cout << "Inside: " << __PRETTY_FUNCTION__ << endl;
-#endif
     PyModule& pyMod = PyModule::getInstance();
-    return pyMod.getNbboCheck();
-    //return new UpdateNbbo();
+    return pyMod.getDerivedPythonClass<StateComputation*>("getNbboChecker", "test");
   }
 
   extern wallaroo::SinkEncoder *get_order_result_sink_encoder()
@@ -322,6 +315,8 @@ uint64_t NbboMessage::get_partition()
   return partition_from_symbol(_symbol);
 }
 
+/*
+ KAGR
 SymbolDataStateChange::SymbolDataStateChange(uint64_t id_): StateChange(id_), _should_reject_trades(false), _last_bid(0), _last_offer(0)
 {
 }
@@ -346,10 +341,14 @@ void SymbolDataStateChange::update(bool should_reject_trades_, double last_bid_,
   _last_offer = last_offer_;
 }
 
-wallaroo::StateChange *SymbolDataStateChangeBuilder::build(uint64_t id_)
+wallaroo::StateChange* SymbolDataStateChangeBuilder::build(uint64_t id_)
 {
-  return new SymbolDataStateChange(id_);
-}
+  PyModule& pyMod = PyModule::getInstance();
+  stringstream args;
+  args<<id_;
+  cout << __PRETTY_FUNCTION__ << ":" << __LINE__ << endl;
+  return pyMod.getDerivedPythonClass<StateChange*>("getSymbolDataStateChangeBuilder", args.str());
+  }*/
 
 uint64_t SymbolPartitionFunction::partition(wallaroo::Data *data_)
 {
@@ -389,26 +388,23 @@ void *UpdateNbboNoUpdateNoOutput::compute(wallaroo::Data *input_, wallaroo::Stat
   return w_stateful_computation_get_return(state_change_repository_helper_, nullptr, none);
 }
 
+/*
+ * KAGR
+
 void *UpdateNbboNoOutput::compute(wallaroo::Data *input_, wallaroo::StateChangeRepository *state_change_repository_, void *state_change_repository_helper_, wallaroo::State *state_, void *none)
 {
   NbboMessage *nbbo_message = (NbboMessage *) input_;
-
   void *state_change_handle = w_state_change_repository_lookup_by_name(state_change_repository_helper_, state_change_repository_, "symbol data state change");
-
   SymbolDataStateChange *symbol_data_state_change = (SymbolDataStateChange *)w_state_change_get_state_change_object(state_change_repository_helper_, state_change_handle);
 
 
   double offer_bid_difference = nbbo_message->offer_price() - nbbo_message->bid_price();
-
   bool should_reject_trades = (offer_bid_difference >= 0.05) || ((offer_bid_difference / nbbo_message->mid()) >= 0.05);
 
   symbol_data_state_change->update(should_reject_trades, nbbo_message->bid_price(), nbbo_message->offer_price());
-
   return w_stateful_computation_get_return(state_change_repository_helper_, nullptr, state_change_handle);
 }
 
-/*
- * KAGR
 void *UpdateNbbo::compute(wallaroo::Data *input_, wallaroo::StateChangeRepository *state_change_repository_, void *state_change_repository_helper_, wallaroo::State *state_, void *none)
 {
   NbboMessage *nbbo_message = (NbboMessage *) input_;

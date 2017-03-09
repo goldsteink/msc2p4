@@ -130,6 +130,8 @@ public:
   SymbolData(): should_reject_trades(true), last_bid(0), last_offer(0) {}
 };
 
+/*
+ * KAGR
 class SymbolDataStateChange: public wallaroo::StateChange
 {
 private:
@@ -149,14 +151,14 @@ public:
   virtual size_t read_log_entry_size_header(char *bytes_) { return 0; }
   virtual bool read_log_entry(char *bytes_) { return true; }
 
-  void update(bool should_reject_trades_, double last_bid_, double last_offer_);
+  virtual void update(bool should_reject_trades_, double last_bid_, double last_offer_) { };
 };
 
 class SymbolDataStateChangeBuilder: public wallaroo::StateChangeBuilder
 {
 public:
   virtual wallaroo::StateChange *build(uint64_t id_);
-};
+};*/
 
 class SymbolPartitionFunction: public wallaroo::PartitionFunctionU64
 {
@@ -197,6 +199,7 @@ class UpdateNbboNoUpdateNoOutput: public wallaroo::StateComputation
   virtual wallaroo::StateChangeBuilder *get_state_change_builder(size_t idx_) { return NULL; }
 };
 
+/*
 class UpdateNbboNoOutput: public wallaroo::StateComputation
 {
   const char *name() { return "Update NBBO, no output"; }
@@ -206,7 +209,7 @@ class UpdateNbboNoOutput: public wallaroo::StateComputation
   virtual wallaroo::StateChangeBuilder *get_state_change_builder(size_t idx_) { return new SymbolDataStateChangeBuilder(); }
 };
 
-/*
+
 class UpdateNbbo: public wallaroo::StateComputation
 {
   const char *name() { return "Update NBBO"; }
