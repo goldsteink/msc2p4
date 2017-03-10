@@ -12,7 +12,7 @@
   #include "/usr/local/include/WallarooCppApi/ApiHooks.hpp"
 //  #include "Base.hpp"
   #include "market-spread-cpp.hpp"
-  extern void printKevin();
+  extern void printName(wallaroo::StateChange* sc_);
   extern void* getNullPtr();
   extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
   extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
@@ -48,7 +48,7 @@
  //%include "Base.hpp"
 %include "market-spread-cpp.hpp"
 
-extern void printKevin();
+extern void printName(wallaroo::StateChange* sc_);
 extern void* getNullPtr();
 extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
 extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
