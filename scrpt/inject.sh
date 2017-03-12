@@ -8,4 +8,7 @@ KEY="Error detected"
 PREPEND="PyError_Print();"
 
 
-sed -i '/Error detected/iPyErr_Print();' $FILE
+
+#sed -i '/Error detected/iPyErr_Print();' $FILE
+sed -i '/::raise/iPyErr_Print();' $FILE
+

@@ -66,7 +66,7 @@ extern "C"
   extern wallaroo::StateComputation *get_update_nbbo_no_output()
   {
     PyModule& pyMod = PyModule::getInstance();
-    return pyMod.getDerivedPythonClass<StateComputation*>("updateNbboNoOutpuotChecker");
+    return pyMod.getDerivedPythonClass<StateComputation*>("updateNbboNoOutputChecker");
     //return new UpdateNbboNoOutput();
   }
 
@@ -315,8 +315,19 @@ uint64_t NbboMessage::get_partition()
   return partition_from_symbol(_symbol);
 }
 
-/*
- KAGR
+
+wallaroo::StateChange* SymbolDataStateChangeBuilder::build(uint64_t id_)
+{
+  PyModule& pyMod = PyModule::getInstance();
+  stringstream args;
+  args<<id_;
+  cout << __PRETTY_FUNCTION__ << ":" << __FILE__ << ":" << __LINE__ << "(ID:" << id_ << endl;
+  wallaroo::StateChange* sc = pyMod.getDerivedPythonClass<StateChange*>("buildSymbolDataStateChange", args.str());
+  cout << "hash: " << sc->hash() << endl;
+  cout << ")" << __PRETTY_FUNCTION__ << ":" << __FILE__ << ":" << __LINE__ << endl;
+  return sc;
+}
+
 SymbolDataStateChange::SymbolDataStateChange(uint64_t id_): StateChange(id_), _should_reject_trades(false), _last_bid(0), _last_offer(0)
 {
 }
@@ -341,14 +352,6 @@ void SymbolDataStateChange::update(bool should_reject_trades_, double last_bid_,
   _last_offer = last_offer_;
 }
 
-wallaroo::StateChange* SymbolDataStateChangeBuilder::build(uint64_t id_)
-{
-  PyModule& pyMod = PyModule::getInstance();
-  stringstream args;
-  args<<id_;
-  cout << __PRETTY_FUNCTION__ << ":" << __LINE__ << endl;
-  return pyMod.getDerivedPythonClass<StateChange*>("getSymbolDataStateChangeBuilder", args.str());
-  }*/
 
 uint64_t SymbolPartitionFunction::partition(wallaroo::Data *data_)
 {

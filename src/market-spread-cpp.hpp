@@ -132,6 +132,7 @@ public:
 
 /*
  * KAGR
+ */
 class SymbolDataStateChange: public wallaroo::StateChange
 {
 private:
@@ -141,6 +142,8 @@ private:
 
 public:
   SymbolDataStateChange(uint64_t id_);
+  SymbolDataStateChange():StateChange((uint64_t)(this)){}
+  virtual ~SymbolDataStateChange(){}
 
   virtual const char *name();
   virtual void apply(wallaroo::State *state_);
@@ -151,14 +154,14 @@ public:
   virtual size_t read_log_entry_size_header(char *bytes_) { return 0; }
   virtual bool read_log_entry(char *bytes_) { return true; }
 
-  virtual void update(bool should_reject_trades_, double last_bid_, double last_offer_) { };
+  virtual void update(bool should_reject_trades_, double last_bid_, double last_offer_);
 };
 
 class SymbolDataStateChangeBuilder: public wallaroo::StateChangeBuilder
 {
 public:
   virtual wallaroo::StateChange *build(uint64_t id_);
-};*/
+};
 
 class SymbolPartitionFunction: public wallaroo::PartitionFunctionU64
 {

@@ -268,9 +268,10 @@ StateChange* PyModule::getSymbolDataStateChange(size_t idx_) const
 
 
 
-void printKevin()
+void printName(wallaroo::StateChange* sc_)
 {
-  cout << "Kevin" << endl;
+  if ( sc_!=nullptr )
+    cout << sc_->name() << endl;
   return;
 }
 
@@ -293,3 +294,11 @@ NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_)
 
 
 
+unsigned long long getWallarooHashValue(wallaroo::StateChange* sc_)
+{
+  if ( sc_==nullptr ) 
+    return 0;
+  cout << "NOT NULL!" << endl;
+  cout << "Val: " << sc_->getHashAsString() << endl;
+  return sc_->hash();
+}

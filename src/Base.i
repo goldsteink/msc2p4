@@ -14,6 +14,7 @@
   #include "market-spread-cpp.hpp"
   extern void printName(wallaroo::StateChange* sc_);
   extern void* getNullPtr();
+  extern unsigned long long getWallarooHashValue(wallaroo::StateChange* sc_);
   extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
   extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
 						 wallaroo::Data* data_, 
@@ -50,6 +51,7 @@
 
 extern void printName(wallaroo::StateChange* sc_);
 extern void* getNullPtr();
+extern unsigned long long getWallarooHashValue(wallaroo::StateChange* sc_);
 extern NbboMessage* getNbboMessageFromInput(wallaroo::Data* data_);
 extern void* w_stateful_computation_get_return(void *state_change_repository_helper_, 
 					       wallaroo::Data* data_, 
