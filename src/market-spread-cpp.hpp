@@ -141,10 +141,19 @@ private:
   double _last_offer;
 
 public:
+  SymbolDataStateChange();
   SymbolDataStateChange(uint64_t id_);
-  SymbolDataStateChange():StateChange((uint64_t)(this)){}
   virtual ~SymbolDataStateChange(){}
 
+public:
+  void set_should_reject_trades(bool srt_) { _should_reject_trades = srt_; }
+  void set_last_bid(double lastb_) { _last_bid=lastb_; }
+  void set_last_offer(double lasto_) { _last_offer=lasto_; }
+  double get_last_bid() { return _last_bid; }
+  double get_last_offer() { return _last_offer; }
+  bool get_should_reject_trades(){ return _should_reject_trades; }
+
+public:
   virtual const char *name();
   virtual void apply(wallaroo::State *state_);
 
@@ -155,7 +164,10 @@ public:
   virtual bool read_log_entry(char *bytes_) { return true; }
 
   virtual void update(bool should_reject_trades_, double last_bid_, double last_offer_);
+
 };
+
+
 
 class SymbolDataStateChangeBuilder: public wallaroo::StateChangeBuilder
 {
@@ -203,6 +215,7 @@ class UpdateNbboNoUpdateNoOutput: public wallaroo::StateComputation
 };
 
 /*
+ KAGR
 class UpdateNbboNoOutput: public wallaroo::StateComputation
 {
   const char *name() { return "Update NBBO, no output"; }
@@ -212,7 +225,7 @@ class UpdateNbboNoOutput: public wallaroo::StateComputation
   virtual wallaroo::StateChangeBuilder *get_state_change_builder(size_t idx_) { return new SymbolDataStateChangeBuilder(); }
 };
 
-
+/* KAGR
 class UpdateNbbo: public wallaroo::StateComputation
 {
   const char *name() { return "Update NBBO"; }

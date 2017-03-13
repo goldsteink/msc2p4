@@ -39,41 +39,26 @@ class PySymbolData(MSPY.State):
 # extends the MSPY.StateChange - this is a virtual
 # class defined in the WallarooCppApi
 #
-#class PySymbolDataSC(MSPY.StateChange):
 class PySymbolDataSC(MSPY.SymbolDataStateChange):
-    _shouldRejectTrades = False
-    _lastBid = 0.0
-    _lastOffer = 0.0
-    _ticker = ""
-
     #def __init__(self):
-    #    #MSPY.StateChange.__init__(self)
-    #    MSPY.SymbolDataStateChange.__init__(self)
-    #    #super(PySymbolDataSC,self).__init__(self)
-    #    print "::::>{}".format("PySymbolDataSC")
-    #    self._shouldRejectTrades = False
-    #    self._lastBid = 0.0
-    #    self._lastOffer = 0.0
-
-    def __init__(self,idx_):
-        #MSPY.StateChange.__init__(self)
-        MSPY.SymbolDataStateChange.__init__(self)
-        #super(PySymbolDataSC,self,idx_).__init__()
-        print "::::>{}".format("PySymbolDataSC")
-        self._shouldRejectTrades = False
-        self._lastBid = 0.0
-        self._lastOffer = 0.0
+    #    super(MSPY.SymbolDataStateChange, self).__init__()
+    #    print "::::>{},type:{}".format("PySymbolDataSC",type(self))
 
 
-    def pKev(self):
-        print "Reject:{},Bid:{},Ask:{}".format(self._shouldRejectTrades,self._lastBid,self._lastOffer)
+    def __init__(self, idx_):
+        #MSPY.SymbolDataStateChange.__init__(self)
+        super(PySymbolDataSC, self).__init__()
+        #self.id(idx_)
+        print "::::>{}:{}".format("PySymbolDataSC", type(self))
+
 
     def name(self):
         print ":::::name()=mememememe"
         return "MEMEMEME"
 
     def apply(self,state_):
-        print "MEMEMEME"
+        print "=============================?MEMEMEME"
+        return None
         
     def to_log_entry(self,bytes_):
         print "MEMEMEME"
@@ -102,10 +87,18 @@ class PySymbolDataSC(MSPY.SymbolDataStateChange):
         return "ME"
 
     def update(self, shouldRejectTrades_, bid_, ask_):
-        return "==================HERE!(@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@)"
-        self._shouldRejectTrades = shouldRejectTrades_
-        self._lastBid = bid_
-        self._lastAsk = ask_
+        print "ShouldRejectTrades:{}, Type:{}".format(shouldRejectTrades_, type(shouldRejectTrades_))
+        self.set_should_reject_trades(shouldRejectTrades_)
+        self.set_last_offer(ask_)
+        self.set_last_bid(bid_)
+        print ":::>update({},{},{})".format(
+            self.get_should_reject_trades(),
+            self.get_last_bid(),
+            self.get_last_offer())
+        return None
+
+    def showLive(self):
+        print "I'm Alive God Dammit! Hash:{}".format(self.getHashAsString())
         
 
         
@@ -188,11 +181,18 @@ class PyUpdateNbbo(MSPY.StateComputation):
             sch = MSPY.w_state_change_repository_lookup_by_name(stateChageRepoHelper_, 
                                                                 stateChangeRepo_,                                                                 "symbol data state change");
             sc_pure = MSPY.w_state_change_get_state_change_object(stateChageRepoHelper_, sch)
+            print sc_pure
             print "HAVE THE PURE {}".format(sc_pure.getHashAsString())
             hash=MSPY.getWallarooHashValue(sc_pure)
             scsd = classes[hash];
-            print scsd
-            scsd.update(shouldRejectTrades,nbbo.bid_price(),nbbo.offer_price())
+            if ( scsd ):
+                print scsd
+                scsd.showLive()
+                scsd.update(shouldRejectTrades, nbbo.bid_price(), nbbo.offer_price())
+            #sc_pure.__class__=PySymbolDataSC
+            #sc_pure.showLive()
+            #if ( shouldRejectTrades ):
+            #sc_pure.update(shouldRejectTrades, nbbo.bid_price(), nbbo.offer_price())
             return MSPY.w_stateful_computation_get_return(stateChageRepoHelper_, MSPY.getNullPtr(), sch)
         except (NameError,RuntimeError,AttributeError) as err:
             print "Error: {}".format(err)
@@ -234,7 +234,7 @@ def buildSymbolDataStateChange(val_):
     try:
         print "::::::>Inside (B) getStateChangeBuilder! val:{}<::::::".format(val_)
         idx=int(val_)
-        sdsc = PySymbolDataSC(val_)
+        sdsc = PySymbolDataSC(idx)
         hash=MSPY.getWallarooHashValue(sdsc)
         if ( hash==0 ):
             print "ERROR: Cannot stash this object!"

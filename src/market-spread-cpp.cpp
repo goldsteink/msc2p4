@@ -328,8 +328,23 @@ wallaroo::StateChange* SymbolDataStateChangeBuilder::build(uint64_t id_)
   return sc;
 }
 
-SymbolDataStateChange::SymbolDataStateChange(uint64_t id_): StateChange(id_), _should_reject_trades(false), _last_bid(0), _last_offer(0)
+SymbolDataStateChange::SymbolDataStateChange():
+  StateChange((uint64_t)(this)),
+  _should_reject_trades(false), 
+  _last_bid(0), 
+  _last_offer(0)
 {
+  cout << "C++ ==> SymbolDataStateChange::SymbolDataStateChange()" << endl;
+}
+
+
+SymbolDataStateChange::SymbolDataStateChange(uint64_t id_): 
+  StateChange(id_), 
+  _should_reject_trades(false), 
+  _last_bid(0), 
+  _last_offer(0)
+{
+  cout << "C++ ==> SymbolDataStateChange::SymbolDataStateChange(" << id_ << ")" << endl;
 }
 
 const char *SymbolDataStateChange::name()
@@ -339,6 +354,7 @@ const char *SymbolDataStateChange::name()
 
 void SymbolDataStateChange::apply(wallaroo::State *state)
 {
+  cout << "C++ ==> application of the symbol!" << endl;
   SymbolData *symbol_data = (SymbolData *) state;
   symbol_data->should_reject_trades = _should_reject_trades;
   symbol_data->last_bid = _last_bid;
@@ -347,6 +363,7 @@ void SymbolDataStateChange::apply(wallaroo::State *state)
 
 void SymbolDataStateChange::update(bool should_reject_trades_, double last_bid_, double last_offer_)
 {
+  cout << "C++ ==> updating the symbol!" << endl;
   _should_reject_trades = should_reject_trades_;
   _last_bid = last_bid_;
   _last_offer = last_offer_;
