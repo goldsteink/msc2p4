@@ -97,6 +97,11 @@ class PySymbolDataSC(MSPY.SymbolDataStateChange):
             self.get_last_offer())
         return None
 
+    def update2(self, shouldRejectTrades_, bid_, ask_):
+        print "ShouldRejectTrades:{}, Type:{}".format(shouldRejectTrades_, type(shouldRejectTrades_))
+        self.set_last_offer(ask_)
+        return None
+
     def showLive(self):
         print "I'm Alive God Dammit! Hash:{}".format(self.getHashAsString())
         
@@ -192,7 +197,7 @@ class PyUpdateNbbo(MSPY.StateComputation):
             #sc_pure.__class__=PySymbolDataSC
             #sc_pure.showLive()
             #if ( shouldRejectTrades ):
-            #sc_pure.update(shouldRejectTrades, nbbo.bid_price(), nbbo.offer_price())
+            #sc_pure.update2(shouldRejectTrades, nbbo.bid_price(), nbbo.offer_price())
             return MSPY.w_stateful_computation_get_return(stateChageRepoHelper_, MSPY.getNullPtr(), sch)
         except (NameError,RuntimeError,AttributeError) as err:
             print "Error: {}".format(err)

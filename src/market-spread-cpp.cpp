@@ -31,6 +31,14 @@
 #define __PDP_ENDIAN    PDP_ENDIAN
 #endif
 
+#define RED_STA "\33[0;33m"
+#define RED_END "\33[0m"
+#define YEL_STA "\33[0;31m"
+#define YEL_END "\33[0m"
+#define STDMSG "====C++ MSPY==>"
+#define NOTICE(msg_) (cout << RED_STA << STDMSG << msg_ << RED_END << endl)
+#define debugPrintFunction(msg_, fname_, lno_) (cout << YEL_STA << msg_ << ":" << fname_ << ":" << lno_ << YEL_END << endl)
+
 extern "C"
 {
   extern wallaroo::SourceDecoder *get_order_source_decoder()
@@ -321,10 +329,10 @@ wallaroo::StateChange* SymbolDataStateChangeBuilder::build(uint64_t id_)
   PyModule& pyMod = PyModule::getInstance();
   stringstream args;
   args<<id_;
-  cout << __PRETTY_FUNCTION__ << ":" << __FILE__ << ":" << __LINE__ << "(ID:" << id_ << endl;
+  debugPrintFunction(STDMSG, __PRETTY_FUNCTION__, __LINE__);
   wallaroo::StateChange* sc = pyMod.getDerivedPythonClass<StateChange*>("buildSymbolDataStateChange", args.str());
-  cout << "hash: " << sc->hash() << endl;
-  cout << ")" << __PRETTY_FUNCTION__ << ":" << __FILE__ << ":" << __LINE__ << endl;
+  cout << YEL_STA << "hash: " << sc->hash() << YEL_END <<  endl;
+  
   return sc;
 }
 
@@ -334,7 +342,7 @@ SymbolDataStateChange::SymbolDataStateChange():
   _last_bid(0), 
   _last_offer(0)
 {
-  cout << "C++ ==> SymbolDataStateChange::SymbolDataStateChange()" << endl;
+  debugPrintFunction(STDMSG, __PRETTY_FUNCTION__, __LINE__);
 }
 
 
@@ -344,7 +352,7 @@ SymbolDataStateChange::SymbolDataStateChange(uint64_t id_):
   _last_bid(0), 
   _last_offer(0)
 {
-  cout << "C++ ==> SymbolDataStateChange::SymbolDataStateChange(" << id_ << ")" << endl;
+  cout << YEL_STA << STDMSG << "SymbolDataStateChange::SymbolDataStateChange(" << id_ << ")" << YEL_END << endl;
 }
 
 const char *SymbolDataStateChange::name()
@@ -354,7 +362,7 @@ const char *SymbolDataStateChange::name()
 
 void SymbolDataStateChange::apply(wallaroo::State *state)
 {
-  cout << "C++ ==> application of the symbol!" << endl;
+  NOTICE("application of the symbol!");
   SymbolData *symbol_data = (SymbolData *) state;
   symbol_data->should_reject_trades = _should_reject_trades;
   symbol_data->last_bid = _last_bid;
@@ -363,7 +371,8 @@ void SymbolDataStateChange::apply(wallaroo::State *state)
 
 void SymbolDataStateChange::update(bool should_reject_trades_, double last_bid_, double last_offer_)
 {
-  cout << "C++ ==> updating the symbol!" << endl;
+  debugPrintFunction(STDMSG, __PRETTY_FUNCTION__, __LINE__);
+  NOTICE("update from SymbolDataStateChange");
   _should_reject_trades = should_reject_trades_;
   _last_bid = last_bid_;
   _last_offer = last_offer_;
@@ -393,7 +402,7 @@ void *CheckOrder::compute(wallaroo::Data *input_, wallaroo::StateChangeRepositor
 
   if (symbol_data->should_reject_trades)
   {
-    cout << "Rejecting: " << *(order_message->symbol()) << endl;
+    NOTICE("Rejecting: " << *(order_message->symbol()));
     // std::cerr << "rejected" << std::endl;
     // TODO: not getting time here, is this a problem?
     OrderResult *order_result = new OrderResult(order_message, symbol_data->last_bid, symbol_data->last_offer, 0);
