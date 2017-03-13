@@ -408,6 +408,10 @@ void *CheckOrder::compute(wallaroo::Data *input_, wallaroo::StateChangeRepositor
     OrderResult *order_result = new OrderResult(order_message, symbol_data->last_bid, symbol_data->last_offer, 0);
     return w_stateful_computation_get_return(state_change_repository_helper_, order_result, none);
   }
+  else
+  {
+    NOTICE("NOT Rejecting: " << *(order_message->symbol()));
+  }
 
   return w_stateful_computation_get_return(state_change_repository_helper_, nullptr, none);
 }
