@@ -20,6 +20,7 @@ function printAndExit()
 {
     if [ $# -lt 3 ] ; then
 	echoRed "Not enough arguments for the function"
+	return
     fi
 
     if [ $1 -gt 0 ] ; then
@@ -36,6 +37,25 @@ function printAndExit()
 
 
 
+# arg1: the file to clean
+# arg2: show debug?
+function cleanFile()
+{
+    if [ $# -lt 1 ] ; then
+	echoRed "Not enough params for the function"
+	return
+    fi
+
+
+    if [ -e $1 ] ; then
+	if [ $2 -gt 0 ] ; then
+	    echoBlue "   Cleaning: $1"
+	fi
+	rm $1
+    fi
+}
+
+
 
 if [ $# -gt 0 ] ; then
     if [ "$1" == "-h" ] || [ "$1" == "?" ] || [ "$1" == "-?" ] ; then
@@ -48,7 +68,7 @@ if [ $# -gt 0 ] ; then
     fi
 fi
 
-
+CLEAN="no"
 SWIG="no"
 CPP="no"
 PONY="no"
@@ -59,6 +79,7 @@ if [ $# -eq 0 ] ; then
     CPP="yes"
     PONY="yes"
     LINK="yes"
+    CLEAN="yes"
 else
     for param in $@
     do
@@ -74,6 +95,9 @@ else
 	elif [[ "$param" == "link" ]]; then
 	    echoBlue "Only running LINKER"
 	    LINK="yes"
+	elif [[ "$param" == "clean" ]]; then
+	    echoBlue "Only cleaning project"
+	    CLEAN="yes"
 	fi
     done
 fi
@@ -81,6 +105,21 @@ fi
 if [ ! -d $build_dir ] ; then
     mkdir -p $build_dir
 fi
+
+if [ "$CLEAN" == "yes" ] ; then
+    showDebug=1
+    cleanFile src/_MSPY.so $showDebug
+    cleanFile src/Base_wrap.cpp $showDebug
+    cleanFile src/Base_wrap.h $showDebug
+    cleanFile src/market-spread-cpp.o $showDebug
+    cleanFile src/msc2p4.o $showDebug
+    cleanFile src/msc2p4 $showDebug
+    cleanFile src/MSPY.py $showDebug
+    cleanFile src/MSPY.pyc $showDebug
+    cleanFile src/PyNbbo.pyc $showDebug
+    cleanFile src/swigpyrun.h $showDebug
+fi
+
 
 if [ "$SWIG" == "yes" ] ; then
     echoBlue -n "Building SWIG..." > $BUILD_LOG 2>&1
