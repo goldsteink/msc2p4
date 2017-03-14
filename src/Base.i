@@ -10,8 +10,16 @@
   #include "/usr/local/include/WallarooCppApi/StateChangeBuilder.hpp"
   #include "/usr/local/include/WallarooCppApi/Computation.hpp"
   #include "/usr/local/include/WallarooCppApi/ApiHooks.hpp"
-//  #include "Base.hpp"
+  #include "/usr/local/include/WallarooCppApi/SourceDecoder.hpp"
+  #include "/usr/local/include/WallarooCppApi/SinkEncoder.hpp"
+  #include "/usr/local/include/WallarooCppApi/PartitionFunction.hpp"
+  
   #include "market-spread-cpp.hpp"
+  #include "Buffers.hpp"
+  #include "Messages.hpp"
+
+  using namespace std;
+
   extern void printName(wallaroo::StateChange* sc_);
   extern void* getNullPtr();
   extern unsigned long long getWallarooHashValue(wallaroo::StateChange* sc_);
@@ -30,7 +38,10 @@
 // global stuff
 %include "std_string.i"
 %include "cpointer.i";
+//%include "std_sstream.i"
 %feature("director") StateComputation;
+%feature("director") StateChange;
+
 
 
 // wallaroo stuff
@@ -44,9 +55,14 @@
 %include "/usr/local/include/WallarooCppApi/StateChangeBuilder.hpp"
 %include "/usr/local/include/WallarooCppApi/Computation.hpp"
 %include "/usr/local/include/WallarooCppApi/ApiHooks.hpp"
+%include "/usr/local/include/WallarooCppApi/SourceDecoder.hpp"
+%include "/usr/local/include/WallarooCppApi/SinkEncoder.hpp"
+%include "/usr/local/include/WallarooCppApi/PartitionFunction.hpp"
+
 
  // this project
- //%include "Base.hpp"
+%include "Buffers.hpp"
+%include "Messages.hpp"
 %include "market-spread-cpp.hpp"
 
 extern void printName(wallaroo::StateChange* sc_);

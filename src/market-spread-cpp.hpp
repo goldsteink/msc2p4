@@ -10,6 +10,8 @@
 #include "WallarooCppApi/StateChangeBuilder.hpp"
 #include "WallarooCppApi/SinkEncoder.hpp"
 
+#include "Messages.hpp"
+
 extern "C"
 {
   extern wallaroo::SourceDecoder *get_order_source_decoder();
@@ -17,109 +19,7 @@ extern "C"
   extern wallaroo::Serializable *w_user_serializable_deserialize(char *bytes_, size_t sz_);
 }
 
-enum FixType
-{
-  Order = 1,
-  Nbbo = 2
-};
-
-enum SideType
-{
-  Buy = 1,
-  Sell = 2
-};
-
-// Buffer
-
-class Reader
-{
-private:
-  unsigned char *_ptr;
-public:
-  Reader(unsigned char *bytes_);
-  uint8_t u8_be();
-  uint16_t u16_be();
-  uint32_t u32_be();
-  uint64_t u64_be();
-  double ms_double();
-  string *ms_string(size_t sz_);
-};
-
-class Writer
-{
-private:
-  unsigned char *_ptr;
-public:
-  Writer(unsigned char *bytes_);
-  void u8_be(uint8_t value_);
-  void u16_be(uint16_t value_);
-  void u32_be(uint32_t value_);
-  void u64_be(uint64_t value_);
-  void ms_double(double value_);
-  void ms_string(string *str);
-};
-
-class OrderSourceDecoder: public wallaroo::SourceDecoder
-{
-public:
-  virtual size_t header_length();
-  virtual size_t payload_length(char *bytes);
-  virtual wallaroo::Data *decode(char *bytes, size_t sz_);
-};
-
-class NbboSourceDecoder: public wallaroo::SourceDecoder
-{
-public:
-  virtual size_t header_length();
-  virtual size_t payload_length(char *bytes);
-  virtual wallaroo::Data *decode(char *bytes, size_t sz_);
-};
-
-class PartitionableMessage: public wallaroo::Data
-{
-public:
-  virtual uint64_t get_partition() = 0;
-};
-
-class OrderMessage: public PartitionableMessage
-{
-private:
-  SideType _side;
-  uint32_t _account;
-  string _order_id;
-  string _symbol;
-  double _order_quantity;
-  double _price;
-  string _transact_time;
-public:
-  OrderMessage(SideType side_, uint32_t account_, string& order_id_, string& symbol_, double order_quantity_, double price_, string& transact_time_);
-  OrderMessage(OrderMessage *that_);
-  virtual uint64_t get_partition();
-
-  SideType side() { return _side; }
-  uint32_t account() { return _account; }
-  string *order_id() { return &_order_id; }
-  string *symbol() { return &_symbol; }
-  double order_quantity() { return _order_quantity; }
-  double price() { return _price; }
-};
-
-class NbboMessage: public PartitionableMessage
-{
-private:
-  string _symbol;
-  string _transit_time;
-  double _bid_price;
-  double _offer_price;
-public:
-  NbboMessage(string& symbol_, string& transit_time_, double bid_price_, double offer_price_);
-  virtual uint64_t get_partition();
-  string get_symbol() { return _symbol; }
-  double bid_price() { return _bid_price; }
-  double offer_price() { return _offer_price; }
-  double mid() {return (_bid_price + _offer_price) / 2.0; }
-};
-
+//--------------------------------------------------------------------
 class SymbolData: public wallaroo::State
 {
 public:
@@ -129,6 +29,8 @@ public:
 
   SymbolData(): should_reject_trades(true), last_bid(0), last_offer(0) {}
 };
+
+
 
 /*
  * KAGR

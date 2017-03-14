@@ -4,6 +4,7 @@
 #define __PYMODULE_HPP__
 
 #include <Python.h>
+
 #include <atomic>
 #include <mutex>
 #include <string>
