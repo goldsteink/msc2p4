@@ -31,13 +31,13 @@
 #define __PDP_ENDIAN    PDP_ENDIAN
 #endif
 
-#define RED_STA "\33[0;33m"
+#define RED_STA "\33[0;31m"
 #define RED_END "\33[0m"
-#define YEL_STA "\33[0;31m"
+#define YEL_STA "\33[0;33m"
 #define YEL_END "\33[0m"
 #define STDMSG "====C++ MSPY==>"
-#define NOTICE(msg_) (cout << RED_STA << STDMSG << msg_ << RED_END << endl)
-#define debugPrintFunction(msg_, fname_, lno_) (cout << YEL_STA << msg_ << ":" << fname_ << ":" << lno_ << YEL_END << endl)
+#define NOTICE(msg_) (cout << YEL_STA << STDMSG << msg_ <<YEL_END << endl)
+#define debugPrintFunction(msg_, fname_, lno_) (cout << RED_STA << msg_ << ":" << fname_ << ":" << lno_ << RED_END << endl)
 
 extern "C"
 {
@@ -352,6 +352,7 @@ SymbolDataStateChange::SymbolDataStateChange(uint64_t id_):
   _last_bid(0), 
   _last_offer(0)
 {
+  debugPrintFunction(STDMSG, __PRETTY_FUNCTION__, __LINE__);
   cout << YEL_STA << STDMSG << "SymbolDataStateChange::SymbolDataStateChange(" << id_ << ")" << YEL_END << endl;
 }
 
@@ -423,7 +424,6 @@ void *UpdateNbboNoUpdateNoOutput::compute(wallaroo::Data *input_, wallaroo::Stat
 
 /*
  * KAGR
-
 void *UpdateNbboNoOutput::compute(wallaroo::Data *input_, wallaroo::StateChangeRepository *state_change_repository_, void *state_change_repository_helper_, wallaroo::State *state_, void *none)
 {
   NbboMessage *nbbo_message = (NbboMessage *) input_;
