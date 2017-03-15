@@ -8,7 +8,16 @@
 # import the C++ artifacts (classes & functions)
 #
 import MSPY
+
+
+
+
+#
+# dictionary translating b/w StateChange* (from C++) into PySymbolDataSC (python)
+#
 classes = {}
+
+
 
 
 #
@@ -19,6 +28,14 @@ showRejectWhenTrue = True
 
 
 
+
+
+
+
+#
+# extends the MSPY.StateChange - this is a virtual
+# class defined in the WallarooCppApi
+#
 class PySymbolData(MSPY.State):
     _shouldRejectTrades = False
     _lastBid = 0.0
@@ -53,26 +70,26 @@ class PySymbolDataSC(MSPY.SymbolDataStateChange):
 
 
     def name(self):
-        print ":::::name()=mememememe"
-        return "MEMEMEME"
+        print "it could be a mismatch in"
+        return "PySumbolDataSC"
 
     def apply(self,state_):
-        print "=============================?MEMEMEME"
+        print "I don't articulate well"
         return None
         
     def to_log_entry(self,bytes_):
-        print "MEMEMEME"
+        print "A list for letting you know"
         
     def get_log_entry_size(self):
-        print "MEMEMEME"
+        print "THis is a part of something - "
         return 0
 
     def get_log_entry_size_header_size(self):
-        print "MEMEMEME"
+        print "rain - what a relief!"
         return 0
 
     def read_log_entry_size_header(self,bytes_):
-        print "MEMEMEME"
+        print "Yesterday it rained, and I heard"
         return 0
 
     def read_log_entry(self):
@@ -103,7 +120,8 @@ class PySymbolDataSC(MSPY.SymbolDataStateChange):
         return None
 
     def showLive(self):
-        print "I'm Alive God Dammit! Hash:{}".format(self.getHashAsString())
+        print "transalation, or time, or tune"
+        print "Hash:{}".format(self.getHashAsString())
         
 
         
@@ -114,23 +132,23 @@ class PySymbolDataSC(MSPY.SymbolDataStateChange):
 #
 class PyUpdateNbboNoOutput(MSPY.StateComputation):
     def __init__(self):
-        MSPY.StateComputatio.__init__(self)
-        #super(PyUpdateNbboNoOutput, self).__init__()
-        print "------------------>"
+        #MSPY.StateComputatio.__init__(self)
+        super(PyUpdateNbboNoOutput, self).__init__()
         
     def name(self):
-        return "Update NBBO, no output"
+        return "Work is work, the pen is heavy"
         
     def get_number_of_state_change_builders(self):
         return 1
             
     def get_state_change_builder(self,idx_):
         print "::::::::::::::::::>building PySymbolDataStateChangeBuilder()++++++++++++++++++++++"
-        return "HELLO"
+        print "I am well, tired, and you?"
+        return getNullPtr()
 
     def compute(self, input_, state_change_repository_, state_change_respository_helper_, state_, none_):
-        print "++++++++++++++++++++HWRE"
-        return None
+        print "Here we are, again at the crosswire"
+        return getNullPtr()
         
 
 
@@ -156,7 +174,6 @@ class PyUpdateNbbo(MSPY.StateComputation):
     def compute(self, input_, stateChangeRepo_, stateChageRepoHelper_, state_, none_):
         try:
             nbbo = MSPY.getNbboMessageFromInput(input_)
-
             if ( debug ):
                 print "NbboMessage({}={}x{})".format(nbbo.get_symbol(), nbbo.bid_price(), nbbo.offer_price())
 
@@ -186,12 +203,11 @@ class PyUpdateNbbo(MSPY.StateComputation):
             sch = MSPY.w_state_change_repository_lookup_by_name(stateChageRepoHelper_, 
                                                                 stateChangeRepo_,                                                                 "symbol data state change");
             sc_pure = MSPY.w_state_change_get_state_change_object(stateChageRepoHelper_, sch)
-            print sc_pure
-            print "HAVE THE PURE {}".format(sc_pure.getHashAsString())
+            print "HAVE THE PURE: Hash:{}".format(sc_pure.getHashAsString())
             hash=MSPY.getWallarooHashValue(sc_pure)
             scsd = classes[hash];
             if ( scsd ):
-                print scsd
+                print "Lookup conversion successful, new object:{}".format(scsd)
                 scsd.showLive()
                 scsd.update(shouldRejectTrades, nbbo.bid_price(), nbbo.offer_price())
             #sc_pure.__class__=PySymbolDataSC
