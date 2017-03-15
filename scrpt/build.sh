@@ -60,7 +60,7 @@ function cleanFile()
 if [ $# -gt 0 ] ; then
     if [ "$1" == "-h" ] || [ "$1" == "?" ] || [ "$1" == "-?" ] ; then
 	echoWhite "Parmas:";
-	echoWhite "   <none>"
+	echoWhite "   <none>|all"
 	echoWhite "   swig"
 	echoWhite "   cpp"
 	echoWhite "   pony"
@@ -88,7 +88,7 @@ else
 	    SWIG="yes"
 	elif [[ "$param" == "cpp" ]]; then
 	    echoBlue "Only building CPP"
-	    CPP="yes"
+	    CPP="ye"
 	elif [[ "$param" == "pony" ]]; then
 	    echoBlue "Only building PONY"
 	    PONY="yes"
@@ -98,6 +98,12 @@ else
 	elif [[ "$param" == "clean" ]]; then
 	    echoBlue "Only cleaning project"
 	    CLEAN="yes"
+	elif [[ "$param" == "all" ]] ; then
+	    CLEAN="yes"
+	    LINK="yes"
+	    PONY="yes"
+	    CPP="yes"
+	    SWIG="yes"
 	fi
     done
 fi
