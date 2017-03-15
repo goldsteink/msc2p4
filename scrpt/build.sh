@@ -15,6 +15,8 @@ C2P_PONY=$base_dir/src
 PROJ=$base_dir
 PRJSRC=$PROJ/src
 
+echoBlue "Project source/binary dir: $PRJSRC"
+
 
 # arg1: exec value
 # arg2: should terminate
@@ -152,7 +154,7 @@ if [ "$CPP" == "yes" ] ; then
     debugargs="-g3 -ggdb -O0"
 
    
-    pushd src>> /dev/null 2>&1
+    pushd $PRJSRC>> /dev/null 2>&1
     c++ -fPIC -fpermissive $debugargs -march=native -mcx16 -fuse-ld=gold \
 	-shared -lpthread -ldl -lutil -lm -lpython2.7 -I/usr/include/python2.7 \
 	-DDEBUG \
