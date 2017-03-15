@@ -98,7 +98,9 @@ const char *SymbolDataStateChange::name()
 
 void SymbolDataStateChange::apply(wallaroo::State *state)
 {
+#ifdef DEBUG
   NOTICE("application of the symbol!");
+#endif
   SymbolData *symbol_data = (SymbolData *) state;
   symbol_data->should_reject_trades = _should_reject_trades;
   symbol_data->last_bid = _last_bid;
@@ -108,7 +110,10 @@ void SymbolDataStateChange::apply(wallaroo::State *state)
 void SymbolDataStateChange::update(bool should_reject_trades_, double last_bid_, double last_offer_)
 {
   debugPrintFunction(STDMSG, __PRETTY_FUNCTION__, __LINE__);
+
+#ifdef DEBUG
   NOTICE("update from SymbolDataStateChange");
+#endif
   _should_reject_trades = should_reject_trades_;
   _last_bid = last_bid_;
   _last_offer = last_offer_;
@@ -138,7 +143,9 @@ void *CheckOrder::compute(wallaroo::Data *input_, wallaroo::StateChangeRepositor
 
   if (symbol_data->should_reject_trades)
   {
+#ifdef DEBUG
     NOTICE("Rejecting: " << *(order_message->symbol()));
+#endif
     // std::cerr << "rejected" << std::endl;
     // TODO: not getting time here, is this a problem?
     OrderResult *order_result = new OrderResult(order_message, symbol_data->last_bid, symbol_data->last_offer, 0);
@@ -146,7 +153,9 @@ void *CheckOrder::compute(wallaroo::Data *input_, wallaroo::StateChangeRepositor
   }
   else
   {
+#ifdef DEBUG
     NOTICE("NOT Rejecting: " << *(order_message->symbol()));
+#endif
   }
 
   return w_stateful_computation_get_return(state_change_repository_helper_, nullptr, none);

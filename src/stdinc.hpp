@@ -31,8 +31,10 @@
 #define YEL_STA "\33[0;33m"
 #define YEL_END "\33[0m"
 #define STDMSG "====C++ MSPY==>"
-#define NOTICE(msg_) (cout << YEL_STA << STDMSG << msg_ <<YEL_END << endl)
+#define NOTICE(msg_) (cout << YEL_STA << STDMSG << msg_ << YEL_END << endl)
 #define debugPrintFunction(msg_, fname_, lno_) (cout << RED_STA << msg_ << ":" << fname_ << ":" << lno_ << RED_END << endl)
+
+
 
 
 #endif //__STDINC_HPP__

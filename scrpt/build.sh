@@ -150,21 +150,22 @@ if [ "$CPP" == "yes" ] ; then
     echoBlue "Building C++ Python Module... ">> $BUILD_LOG 2>&1
     echoBlue "Building C++ Python Module..."
     debugargs="-g3 -ggdb -O0"
-    
+
+   
     pushd src>> /dev/null 2>&1
     c++ -fPIC -fpermissive $debugargs -march=native -mcx16 -fuse-ld=gold \
 	-shared -lpthread -ldl -lutil -lm -lpython2.7 -I/usr/include/python2.7 \
+	-DDEBUG \
 	-I"." \
 	-I$WALL_INC_DIR -L$WALL_LIB_DIR -l$WALL_LIB_NAME \
-	-DDEBUG \
 	*.cpp -o _MSPY.so >> $BUILD_LOG 2>&1
     printAndExit $? 1 "C++ MSPY library"
 
     c++ -fPIC -fpermissive $debugargs -march=native -mcx16 -fuse-ld=gold \
 	-shared -lpthread -ldl -lutil -lm -lpython2.7 -I/usr/include/python2.7 \
+	-DDEBUG \
 	-I"." \
 	-I$WALL_INC_DIR -L$WALL_LIB_DIR -l$WALL_LIB_NAME \
-	-DDEBUG \
 	-c market-spread-cpp.cpp >> $BUILD_LOG 2>&1
     printAndExit $? 1 "C++ MSCPP Object"
     popd>>/dev/null 2>&1
