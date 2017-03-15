@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # my dirs
-BUILD_DIR=`pwd`/src
+BUILD_DIR=$PWD/src
 echo $BUILD_DIR
 
 echo $BUILD_DIR/msc2p4 \
