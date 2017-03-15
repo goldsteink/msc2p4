@@ -2,14 +2,17 @@
 
 . ~/bin/colors.sh
 
-build_dir=${PWD}/build
+base_dir=`pwd`
+echoBlue "Project located in: $base_dir"
+
+build_dir=$base_dir/build
 BUILD_LOG=$build_dir/build.log
 WALL_HOME=/home/kgoldstein/dev/buffy/lib
 WALL_API_DIR=/usr/local/lib/WallarooCppApi
 WALL_API_LIB=wallaroo
 WALL_INC_DIR=/usr/local/include/WallarooCppApi
-C2P_PONY=/home/kgoldstein/dev/c++/msc2p4/src
-PROJ=/home/kgoldstein/dev/c++/msc2p4
+C2P_PONY=$base_dir/src
+PROJ=$base_dir
 PRJSRC=$PROJ/src
 
 
@@ -88,7 +91,7 @@ else
 	    SWIG="yes"
 	elif [[ "$param" == "cpp" ]]; then
 	    echoBlue "Only building CPP"
-	    CPP="ye"
+	    CPP="yes"
 	elif [[ "$param" == "pony" ]]; then
 	    echoBlue "Only building PONY"
 	    PONY="yes"
