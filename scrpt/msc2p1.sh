@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # my dirs
-BUILD_DIR=/home/kgoldstein/dev/c++/msc2p4/src
+BUILD_DIR=`pwd`/src
+echo $BUILD_DIR
 
 echo $BUILD_DIR/msc2p4 \
 -i 127.0.0.1:7000,127.0.0.1:7001 \
