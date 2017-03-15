@@ -171,24 +171,24 @@ if [ "$CPP" == "yes" ] ; then
 fi
 
 
-pony_obj=src/src.o
 if [ "$PONY" == "yes" ] ; then
     echoBlue "Building pony" >> $BUILD_LOG 2>&1
     echoBlue "Building pony"
-
+    pony_obj=src/src.o
+    OBJFILE=src/msc2p4.o
     if [ -e $pony_obj ] ; then
 	echoRed "cleaning old object file: $pony_obj" >> $BUILD_LOG 2>&1
 	rm $pony_obj
     fi
-    if [ -e src/msc2p4.o ] ; then
+    if [ -e $OBJFILE ] ; then
 	echoRed "cleaning old object file: src/msc2p4.o" >> $BUILD_LOG 2>&1
-	rm src/msc2p4.o
+	rm $OBJFILE
     fi
     
     ponyc --path=$WALL_HOME:$WALL_LIB_DIR:$CPP_PONY:$C2P_LIB --output=src ./src >> $BUILD_LOG 2>&1
     if [ -e $pony_obj ] ; then
 	printAndExit 0 1 "PONY compilation successfull"
-	mv $pony_obj src/msc2p4.o
+	mv $pony_obj $OBJFILE
     else
 	printAndExit 1 1 "PONY compilation failed"
     fi
@@ -199,7 +199,8 @@ pushd ./src >> /dev/null 2>&1
 if [ "$LINK" == "yes" ] ; then
     echoBlue "Pony/C++/Swig linking..." >> $BUILD_LOG 2>&1
     echoBlue "Pony/C++/Swig linking..."
-    c++ -o $PRJSRC/msc2p4 -O0 -g -march=native -mcx16 -fuse-ld=gold $PRJSRC/*.o \
+    BINFILE=$PRJSRC/msc2p4 
+    c++ -o $BINFILE -O0 -g -march=native -mcx16 -fuse-ld=gold $PRJSRC/*.o \
 	/usr/local/lib/WallarooCppApi/libwallaroo.a \
 	-L$WALL_HOME -Wl,-rpath,$WALL_HOME \
 	-L$WALL_API_DIR -Wl,-rpath,$WALL_API_DIR \
@@ -211,6 +212,6 @@ if [ "$LINK" == "yes" ] ; then
 	-L/usr/local/lib -Wl,-rpath,/usr/local/lib -Wl,--start-group \
 	-lwallaroo -lstdc++ -lrt -Wl,--end-group -lponyrt -lpthread -ldl -lm -lpython2.7 \
 	-l:_MSPY.so >> $BUILD_LOG 2>&1
-    printAndExit $? 1 "Pony/C++/Swig linking"
+    printAndExit $? 1 "Linking complete! - [Output:$BINFILE] - "
 fi
 popd >> /dev/null 2>&1
