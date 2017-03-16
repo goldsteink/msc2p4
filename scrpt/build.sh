@@ -136,15 +136,20 @@ if [ "$SWIG" == "yes" ] ; then
     echoBlue -n "Building SWIG..." > $BUILD_LOG 2>&1
     echoBlue "Building SWIG..."
 
-    swig -python -external-runtime src/swigpyrun.h >> $BUILD_LOG 2>&1
-    printAndExit $? 1 "SWIG external runtime"
-
-    swig -shadow -cppext cpp -c++ -python src/Base.i >> $BUILD_LOG 2>&1
-    printAndExit $? 1 "SWIG shadow classes"
-
-    echoGreen "Injecting verbose errors" >> $BUILD_LOG 2>&1
-    echoGreen "Injecting verbose errors"
-    . ./scrpt/inject.sh
+    OSNAME=`uname`
+    if [ "$OSNAME" != "Linux" ] ; then
+	echoRed "SWIG generation only available on Linux"
+    else
+	swig -python -external-runtime src/swigpyrun.h >> $BUILD_LOG 2>&1
+	printAndExit $? 1 "SWIG external runtime"
+	
+	swig -shadow -cppext cpp -c++ -python src/Base.i >> $BUILD_LOG 2>&1
+	printAndExit $? 1 "SWIG shadow classes"
+	
+	echoGreen "Injecting verbose errors" >> $BUILD_LOG 2>&1
+	echoGreen "Injecting verbose errors"
+	. ./scrpt/inject.sh
+    fi
 fi
 
 
@@ -163,10 +168,19 @@ if [ "$CPP" == "yes" ] ; then
     echoBlue "PyLibs:$PYLIBS"
     echoBlue "PyIncludes:$PYINC" >> $BUILD_LOG 2>&1
     echoBlue "PyLibs:$PYLIBS" >> $BUILD_LOG 2>&1
+    
+    OSNAME=`uname`
+    echoGreen $OSNAME
+    if [ "$OSNAME" == "Darwin" ] ; then
+	OSLD="-ldl"
+    else
+	OSLD="-fuse-ld=gold"
+    fi
 
     pushd $PRJSRC>> /dev/null 2>&1
-    c++ -fPIC -fpermissive $debugargs -march=native -mcx16 -fuse-ld=gold \
+    c++ -fPIC -fpermissive $debugargs -march=native -mcx16 \
 	-shared \
+	$OSLD \
 	$PYLIBS \
 	$PYINC \
 	-std=c++11 \
@@ -176,8 +190,9 @@ if [ "$CPP" == "yes" ] ; then
 	*.cpp -o _MSPY.so >> $BUILD_LOG 2>&1
     printAndExit $? 1 "C++ MSPY library"
 
-    c++ -fPIC -fpermissive $debugargs -march=native -mcx16 -fuse-ld=gold \
+    c++ -fPIC -fpermissive $debugargs -march=native -mcx16 \
 	-shared \
+	$OSLD \
 	$PYLIBS \
 	$PYINC \
 	-std=c++11 \
@@ -219,7 +234,16 @@ if [ "$LINK" == "yes" ] ; then
     echoBlue "Pony/C++/Swig linking..." >> $BUILD_LOG 2>&1
     echoBlue "Pony/C++/Swig linking..."
     BINFILE=$PRJSRC/msc2p4 
-    c++ -o $BINFILE -O0 -g -march=native -mcx16 -fuse-ld=gold $PRJSRC/*.o \
+    OSNAME=`uname`
+    if [ "$OSNAME" == "Darwin" ] ; then
+	OSLD="-ldl"
+    else
+	OSLD="-fuse-ld=gold"
+    fi
+
+    c++ -o $BINFILE -O0 -g -march=native -mcx16 \
+	OSLD \
+	$PRJSRC/*.o \
 	/usr/local/lib/WallarooCppApi/libwallaroo.a \
 	-L$WALL_HOME -Wl,-rpath,$WALL_HOME \
 	-L$WALL_API_DIR -Wl,-rpath,$WALL_API_DIR \
