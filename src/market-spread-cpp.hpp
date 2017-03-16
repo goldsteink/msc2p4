@@ -126,7 +126,7 @@ class UpdateNbboNoOutput: public wallaroo::StateComputation
   virtual size_t get_number_of_state_change_builders() { return 1;}
   virtual wallaroo::StateChangeBuilder *get_state_change_builder(size_t idx_) { return new SymbolDataStateChangeBuilder(); }
 };
-
+*/
 /* KAGR
 class UpdateNbbo: public wallaroo::StateComputation
 {
