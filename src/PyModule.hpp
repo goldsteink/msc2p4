@@ -96,6 +96,12 @@ public:
     {
       printError("Unable to call specified function", __PRETTY_FUNCTION__, __LINE__);
     }
+    
+    //
+    // should never have made it here
+    //
+    cerr << "BAD!" << endl;
+    return nullptr;
   }
 };
 
