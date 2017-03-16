@@ -10,7 +10,7 @@
 #include <string>
 #include <sstream>
 #include <iostream>
-#include <swigpyrun.h>
+#include "swigpyrun.h"
 #include <WallarooCppApi/Computation.hpp>
 #include "market-spread-cpp.hpp"
 
