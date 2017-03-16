@@ -193,6 +193,12 @@ StateComputation* PyModule::getNbboCheck() const
   {
     cerr << "Unable to call specified function" << endl;
   }
+
+  //
+  // should never get here
+  //
+  cerr << "should never get here!" << endl;
+  return nullptr;
 }
 
 
