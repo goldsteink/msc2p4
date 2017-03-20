@@ -7,13 +7,16 @@ echoBlue "Project located in: $base_dir"
 
 build_dir=$base_dir/build
 BUILD_LOG=$build_dir/build.log
-WALL_HOME=/home/kgoldstein/dev/buffy/lib
+WALL_HOME=/home/kgoldstein/dev/BleedingEdge/buffy/lib
 WALL_API_DIR=/usr/local/lib/WallarooCppApi
 WALL_API_LIB=wallaroo
 WALL_INC_DIR=/usr/local/include/WallarooCppApi
 C2P_PONY=$base_dir/src
 PROJ=$base_dir
 PRJSRC=$PROJ/src
+
+YES="yes"
+NO="no"
 
 echoBlue "Project source/binary dir: $PRJSRC"
 
@@ -73,66 +76,77 @@ if [ $# -gt 0 ] ; then
     fi
 fi
 
-CLEAN="no"
-SWIG="no"
-CPP="no"
-PONY="no"
-LINK="no"
+CLEAN=$NO
+SWIG=$NO
+CPP=$NO
+PONY=$NO
+LINK=$NO
+NLOG=$NO
 if [ $# -eq 0 ] ; then
     echoBlue "Building whole project"
-    SWIG="yes"
-    CPP="yes"
-    PONY="yes"
-    LINK="yes"
-    CLEAN="yes"
+    SWIG=$YES
+    CPP=$YES
+    PONY=$YES
+    LINK=$YES
+    CLEAN=$NO
 else
     for param in $@
     do
-	if [[ "$param" == "swig" ]]; then
+	pval="${param,,}"
+	if [[ "$pval" == "swig" ]]; then
 	    echoBlue "Only building SWIG"
-	    SWIG="yes"
-	elif [[ "$param" == "cpp" ]]; then
+	    SWIG=$YES
+	elif [[ "$pval" == "cpp" ]]; then
 	    echoBlue "Only building CPP"
-	    CPP="yes"
-	elif [[ "$param" == "pony" ]]; then
+	    CPP=$YES
+	elif [[ "$pval" == "pony" ]]; then
 	    echoBlue "Only building PONY"
-	    PONY="yes"
-	elif [[ "$param" == "link" ]]; then
+	    PONY=$YES
+	elif [[ "$pval" == "link" ]]; then
 	    echoBlue "Only running LINKER"
-	    LINK="yes"
-	elif [[ "$param" == "clean" ]]; then
+	    LINK=$YES
+	elif [[ "$pval" == "clean" ]]; then
 	    echoBlue "Only cleaning project"
-	    CLEAN="yes"
-	elif [[ "$param" == "all" ]] ; then
-	    CLEAN="yes"
-	    LINK="yes"
-	    PONY="yes"
-	    CPP="yes"
-	    SWIG="yes"
+	    CLEAN=$YES
+	elif [[ "$pval" == "nlog" ]]; then
+	    echoBlue "Cleaning log"
+	    NLOG=$YES
+	elif [[ "$pval" == "all" ]] ; then
+	    CLEAN=$YES
+	    LINK=$YES
+	    PONY=$YES
+	    CPP=$YES
+	    SWIG=$YES
+	    NLOG=$NO
 	fi
     done
 fi
+
+
 
 if [ ! -d $build_dir ] ; then
     mkdir -p $build_dir
 fi
 
-if [ "$CLEAN" == "yes" ] ; then
+if [ $CLEAN == $YES ] ; then
     showDebug=1
     cleanFile src/_MSPY.so $showDebug
-    cleanFile src/Base_wrap.cpp $showDebug
-    cleanFile src/Base_wrap.h $showDebug
     cleanFile src/market-spread-cpp.o $showDebug
     cleanFile src/msc2p4.o $showDebug
     cleanFile src/msc2p4 $showDebug
-    cleanFile src/MSPY.py $showDebug
     cleanFile src/MSPY.pyc $showDebug
     cleanFile src/PyNbbo.pyc $showDebug
-    cleanFile src/swigpyrun.h $showDebug
 fi
 
 
-if [ "$SWIG" == "yes" ] ; then
+
+if [ $NLOG == $YES ] ; then
+    echoBlue "Cleaning BUILD_LOG"
+    cleanFile $BUILD_LOG 1
+fi
+
+
+if [ $SWIG == $YES ] ; then
     echoBlue -n "Building SWIG..." > $BUILD_LOG 2>&1
     echoBlue "Building SWIG..."
 
@@ -153,7 +167,7 @@ if [ "$SWIG" == "yes" ] ; then
 fi
 
 
-if [ "$CPP" == "yes" ] ; then
+if [ $CPP == $YES ] ; then
     CPPCMD=`command -v c++`
     if [ "$CPPCMD" == "" ] ; then
 	echoRed "C++ compiler not found"
@@ -164,21 +178,24 @@ if [ "$CPP" == "yes" ] ; then
     debugargs="-g3 -ggdb -O0"
     PYINC=`python-config --includes`
     PYLIBS=`python-config --ldflags`
-    echoBlue "PyIncludes:$PYINC"
-    echoBlue "PyLibs:$PYLIBS"
     echoBlue "PyIncludes:$PYINC" >> $BUILD_LOG 2>&1
     echoBlue "PyLibs:$PYLIBS" >> $BUILD_LOG 2>&1
     
     OSNAME=`uname`
     echoGreen $OSNAME
+    OSLD="-fuse-ld=gold"
     if [ "$OSNAME" == "Darwin" ] ; then
 	OSLD="-ldl"
-    else
-	OSLD="-fuse-ld=gold"
+    fi
+
+    COMPILER=`command -v c++`
+    if [ "$COMPILER" == "" ] ; then
+	echoRed "Can't find compiler!, looked with: 'command -v c++'"
+	exit 1
     fi
 
     pushd $PRJSRC>> /dev/null 2>&1
-    c++ -fPIC -fpermissive $debugargs -march=native -mcx16 \
+    $COMPILER -fPIC -fpermissive $debugargs -march=native -mcx16 \
 	-shared \
 	$OSLD \
 	$PYLIBS \
@@ -190,7 +207,7 @@ if [ "$CPP" == "yes" ] ; then
 	*.cpp -o _MSPY.so >> $BUILD_LOG 2>&1
     printAndExit $? 1 "C++ MSPY library"
 
-    c++ -fPIC -fpermissive $debugargs -march=native -mcx16 \
+    $COMPILER -fPIC -fpermissive $debugargs -march=native -mcx16 \
 	-shared \
 	$OSLD \
 	$PYLIBS \
@@ -205,7 +222,7 @@ if [ "$CPP" == "yes" ] ; then
 fi
 
 
-if [ "$PONY" == "yes" ] ; then
+if [ $PONY == $YES ] ; then
     echoBlue "Building pony" >> $BUILD_LOG 2>&1
     echoBlue "Building pony"
     pony_obj=src/src.o
@@ -230,21 +247,28 @@ fi
 
 
 pushd ./src >> /dev/null 2>&1
-if [ "$LINK" == "yes" ] ; then
+if [ $LINK == $YES ] ; then
     echoBlue "Pony/C++/Swig linking..." >> $BUILD_LOG 2>&1
     echoBlue "Pony/C++/Swig linking..."
     BINFILE=$PRJSRC/msc2p4 
+
+    OSLD="-fuse-ld=gold"
     OSNAME=`uname`
     if [ "$OSNAME" == "Darwin" ] ; then
 	OSLD="-ldl"
-    else
-	OSLD="-fuse-ld=gold"
     fi
 
-    c++ -o $BINFILE -O0 -g -march=native -mcx16 \
-	OSLD \
+
+    COMPILER=`command -v c++`
+    if [ "$CPP" == "" ] ; then
+	echoRed "Can't find compiler!, looked with: 'command -v c++'"
+	return 1
+    fi
+
+    $COMPILER -o $BINFILE -O0 -g -march=native -mcx16 \
+	$OSLD \
 	$PRJSRC/*.o \
-	/usr/local/lib/WallarooCppApi/libwallaroo.a \
+	$WALL_API_DIR/libwallaroo.a \
 	-L$WALL_HOME -Wl,-rpath,$WALL_HOME \
 	-L$WALL_API_DIR -Wl,-rpath,$WALL_API_DIR \
 	-L$PRJSRC -Wl,-rpath,$PRJSRC \
@@ -253,7 +277,10 @@ if [ "$LINK" == "yes" ] ; then
 	-L/usr/local/lib/pony/0.9.0-e405a8d/bin/../packages \
 	-Wl,-rpath,/usr/local/lib/pony/0.9.0-e405a8d/bin/../packages \
 	-L/usr/local/lib -Wl,-rpath,/usr/local/lib -Wl,--start-group \
-	-lwallaroo -lstdc++ -lrt -Wl,--end-group -lponyrt -lpthread -ldl -lm -lpython2.7 \
+	-lwallaroo \
+	-lssl \
+	-lcrypto \
+	-lstdc++ -lrt -Wl,--end-group -lponyrt -lpthread -ldl -lm -lpython2.7 \
 	-l:_MSPY.so >> $BUILD_LOG 2>&1
     printAndExit $? 1 "Linking complete! - [Output:$BINFILE] - "
 fi
